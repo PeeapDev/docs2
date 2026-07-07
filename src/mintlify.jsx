@@ -97,18 +97,26 @@ export const Table = (props) => <div className="table-wrap"><table {...props} />
 
 // "Try it here" — a live API request widget. Usage in MDX:
 //   <TryIt method="POST" url="/verify/create" body={`{ "phone": "077601707" }`} />
-export function TryIt({ method = 'POST', url = '', body = '' }) {
-  const initial = typeof body === 'string' ? body : JSON.stringify(body, null, 2);
-  const [input, setInput] = React.useState(initial);
+// Auto-rendered on every API-reference page from its `api: METHOD /path` frontmatter.
+const API_BASE = 'https://api.peeap.com';
+
+export function TryIt({ method = 'POST', url = '', body = '', auth = true }) {
+  const m = String(method).toUpperCase();
+  const needsBody = m !== 'GET' && m !== 'DELETE' && m !== 'HEAD';
+  const [u, setU] = React.useState(url);
+  const [input, setInput] = React.useState(typeof body === 'string' ? body : JSON.stringify(body || {}, null, 2));
+  const [token, setToken] = React.useState('');
   const [resp, setResp] = React.useState(null);
   const [status, setStatus] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const send = async () => {
     setLoading(true); setResp(null); setStatus(null);
     try {
-      const opts = { method, headers: { 'Content-Type': 'application/json' } };
-      if (method.toUpperCase() !== 'GET' && input.trim()) opts.body = input;
-      const full = url.startsWith('http') ? url : `https://api.peeap.com${url.startsWith('/') ? '' : '/'}${url}`;
+      const headers = { 'Content-Type': 'application/json' };
+      if (token.trim()) headers['Authorization'] = token.trim().toLowerCase().startsWith('bearer') || token.trim().toLowerCase().startsWith('session') ? token.trim() : `Bearer ${token.trim()}`;
+      const opts = { method: m, headers };
+      if (needsBody && input.trim()) opts.body = input;
+      const full = u.startsWith('http') ? u : `${API_BASE}${u.startsWith('/') ? '' : '/'}${u}`;
       const r = await fetch(full, opts);
       setStatus(r.status);
       const t = await r.text();
@@ -116,16 +124,19 @@ export function TryIt({ method = 'POST', url = '', body = '' }) {
     } catch (e) { setStatus('ERR'); setResp(String(e?.message || e)); }
     finally { setLoading(false); }
   };
-  const m = method.toLowerCase();
   return (
     <div className="tryit">
       <div className="tryit-head">
-        <span className={`tryit-method ${m}`}>{method.toUpperCase()}</span>
-        <span className="tryit-url">{url}</span>
+        <span className={`tryit-method ${m.toLowerCase()}`}>{m}</span>
+        <input className="tryit-url-input" value={u} onChange={(e) => setU(e.target.value)} spellCheck={false} aria-label="URL" />
         <button className="btn primary" onClick={send} disabled={loading}>{loading ? 'Sending…' : 'Send'}</button>
       </div>
       <div className="tryit-body">
-        {method.toUpperCase() !== 'GET' && (
+        {auth && (
+          <input className="tryit-token" value={token} onChange={(e) => setToken(e.target.value)} spellCheck={false}
+            placeholder="Bearer token — paste your access token for authenticated endpoints (optional)" />
+        )}
+        {needsBody && (
           <textarea value={input} onChange={(e) => setInput(e.target.value)} spellCheck={false} placeholder="Request body (JSON)" />
         )}
         {status !== null && (

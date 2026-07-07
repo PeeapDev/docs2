@@ -1,7 +1,7 @@
 import React from 'react';
 import { Routes, Route, NavLink, useLocation, Navigate, Link } from 'react-router-dom';
 import { MDXProvider } from '@mdx-js/react';
-import { mdxComponents } from './mintlify.jsx';
+import { mdxComponents, TryIt } from './mintlify.jsx';
 import docsConfig from '../content/docs.json';
 
 // Compiled components + raw markdown (for the "Copy for AI" button).
@@ -28,6 +28,18 @@ for (const t of tabs) for (const g of t.groups || []) for (const pg of g.pages |
 }
 const groupOf = (key) => flat.find((f) => f.key === key)?.group;
 const stripFrontmatter = (raw) => (raw || '').replace(/^---[\s\S]*?---\s*/, '');
+
+// Parse `api: METHOD /path` frontmatter → { method, path } for the auto Try-it widget.
+function parseApiMeta(meta) {
+  const raw = meta?.api;
+  if (!raw || typeof raw !== 'string') return null;
+  const s = raw.trim().replace(/^['"]|['"]$/g, '');
+  const sp = s.indexOf(' ');
+  if (sp < 0) return null;
+  const method = s.slice(0, sp).toUpperCase();
+  if (!/^(GET|POST|PUT|PATCH|DELETE)$/.test(method)) return null;
+  return { method, path: s.slice(sp + 1).trim() };
+}
 
 function CopyPageButton({ pageKey }) {
   const [copied, setCopied] = React.useState(false);
@@ -106,6 +118,7 @@ function Page() {
     </article><aside className="toc" /></div>;
   }
   const C = entry.Component;
+  const api = parseApiMeta(entry.meta);
   const idx = flat.findIndex((f) => f.key === key);
   const prev = idx > 0 ? flat[idx - 1] : null;
   const next = idx >= 0 && idx < flat.length - 1 ? flat[idx + 1] : null;
@@ -114,6 +127,12 @@ function Page() {
       <article className="content">
         {entry.meta?.title && <h1 className="page-title">{entry.meta.title}</h1>}
         {entry.meta?.description && <p className="page-desc">{entry.meta.description}</p>}
+        {api && (
+          <div className="api-tryit">
+            <div className="api-tryit-label">Try it here — send a real request to <code>api.peeap.com</code></div>
+            <TryIt method={api.method} url={api.path} />
+          </div>
+        )}
         <MDXProvider components={mdxComponents}><C /></MDXProvider>
         <div className="page-nav">
           {prev ? <Link to={'/' + prev.key}><div className="lbl">← Previous</div><div className="ttl">{titleFor(prev.key)}</div></Link> : <span style={{ flex: 1 }} />}
