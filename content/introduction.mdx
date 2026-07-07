@@ -1,0 +1,66 @@
+---
+title: Introduction
+description: "Welcome to the Payment System API documentation"
+---
+
+# Welcome to Payment System
+
+Payment System is a comprehensive closed-loop card payment platform that enables businesses to issue virtual and physical cards, manage wallets, and process transactions securely.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Wallets" icon="wallet" href="/concepts/wallets">
+    Create and manage digital wallets with multi-currency support
+  </Card>
+  <Card title="Cards" icon="credit-card" href="/concepts/cards">
+    Issue virtual and physical cards linked to wallets
+  </Card>
+  <Card title="Transactions" icon="money-bill-transfer" href="/concepts/transactions">
+    Process payments, transfers, and refunds in real-time
+  </Card>
+  <Card title="KYC" icon="user-check" href="/concepts/kyc">
+    Built-in identity verification and compliance
+  </Card>
+</CardGroup>
+
+## Architecture Overview
+
+Payment System is built on a microservices architecture:
+
+- **Identity Service**: User authentication, registration, and KYC management
+- **Account Service**: Wallet management and balance operations
+- **Card Service**: Card issuance, activation, and management
+- **Transaction Service**: Payment processing and settlement
+- **API Gateway**: Unified entry point for all API requests
+
+## Getting Started
+
+<Steps>
+  <Step title="Create an Account">
+    Sign up for a developer account to get your API credentials
+  </Step>
+  <Step title="Authenticate">
+    Use JWT tokens to authenticate your API requests
+  </Step>
+  <Step title="Create a Wallet">
+    Create a wallet to hold funds for your users
+  </Step>
+  <Step title="Issue a Card">
+    Issue virtual or physical cards linked to wallets
+  </Step>
+</Steps>
+
+## Base URL
+
+All API requests should be made to:
+
+```
+https://api.paymentsystem.com/v1
+```
+
+For development/testing:
+
+```
+http://localhost:3000/api/v1
+```

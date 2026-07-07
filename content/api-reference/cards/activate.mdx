@@ -1,0 +1,106 @@
+---
+title: Activate Card
+api: POST /cards/{cardId}/activate
+description: "Activate a card for use"
+---
+
+# Activate Card
+
+Activate a card that is in `PENDING_ACTIVATION` status.
+
+## Endpoint
+
+```
+POST /cards/{cardId}/activate
+```
+
+## Path Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `cardId` | string | Yes | The card ID |
+
+## Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes | Bearer access token |
+| `Content-Type` | Yes | application/json |
+
+## Request Body
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `activationCode` | string | Yes* | 4-digit activation code (for physical cards) |
+
+*Required for physical cards. Virtual cards can be activated without a code.
+
+## Example Request
+
+### Virtual Card
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/cards/crd_abc123/activate \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+### Physical Card
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/cards/crd_abc123/activate \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "activationCode": "1234"
+  }'
+```
+
+## Response
+
+### Success (200 OK)
+
+```json
+{
+  "id": "crd_abc123",
+  "status": "ACTIVE",
+  "activatedAt": "2024-01-15T10:30:00Z",
+  "message": "Card activated successfully"
+}
+```
+
+### Errors
+
+| Status | Code | Description |
+|--------|------|-------------|
+| 400 | `INVALID_CODE` | Activation code is incorrect |
+| 400 | `ALREADY_ACTIVATED` | Card is already active |
+| 401 | `UNAUTHORIZED` | Invalid or missing access token |
+| 403 | `FORBIDDEN` | Card belongs to another user |
+| 404 | `NOT_FOUND` | Card does not exist |
+| 422 | `CODE_EXPIRED` | Activation code has expired |
+
+```json
+{
+  "statusCode": 400,
+  "message": "Invalid activation code",
+  "error": "INVALID_CODE",
+  "details": {
+    "attemptsRemaining": 2
+  }
+}
+```
+
+## Activation Code
+
+For physical cards:
+- Code is printed on a sticker attached to the card
+- Code expires 30 days after card is shipped
+- After 3 failed attempts, card is blocked and requires support
+
+## Notes
+
+- Virtual cards are activated immediately upon creation (no code needed)
+- Physical cards require the activation code from the card package
+- Once activated, the card can be used for transactions immediately

@@ -1,0 +1,248 @@
+---
+title: JavaScript SDK
+description: "Payment System SDK for JavaScript and TypeScript"
+---
+
+# JavaScript SDK
+
+The official JavaScript/TypeScript SDK for Payment System.
+
+## Installation
+
+<CodeGroup>
+```bash npm
+npm install @paymentsystem/sdk
+```
+
+```bash yarn
+yarn add @paymentsystem/sdk
+```
+
+```bash pnpm
+pnpm add @paymentsystem/sdk
+```
+</CodeGroup>
+
+## Quick Start
+
+```typescript
+import { PaymentSystem } from '@paymentsystem/sdk';
+
+// Initialize the client
+const client = new PaymentSystem({
+  baseUrl: 'https://api.paymentsystem.com/v1',
+  accessToken: 'your-access-token',
+  refreshToken: 'your-refresh-token'
+});
+
+// Create a wallet
+const wallet = await client.wallets.create({
+  currencyCode: 'USD'
+});
+
+console.log(wallet.id); // wal_abc123
+```
+
+## Configuration
+
+```typescript
+const client = new PaymentSystem({
+  // Required
+  baseUrl: 'https://api.paymentsystem.com/v1',
+
+  // Authentication (at least one required)
+  accessToken: 'your-access-token',
+  refreshToken: 'your-refresh-token',
+
+  // Optional
+  timeout: 30000,           // Request timeout in ms
+  retries: 3,               // Number of retries
+  retryDelay: 1000,         // Base retry delay in ms
+  onTokenRefresh: (tokens) => {
+    // Called when tokens are refreshed
+    saveTokens(tokens);
+  }
+});
+```
+
+## Authentication
+
+### Login
+
+```typescript
+const { user, tokens } = await client.auth.login({
+  email: 'user@example.com',
+  password: 'SecurePass123!'
+});
+
+// Store tokens for future use
+localStorage.setItem('accessToken', tokens.accessToken);
+localStorage.setItem('refreshToken', tokens.refreshToken);
+```
+
+### Register
+
+```typescript
+const { user, tokens } = await client.auth.register({
+  email: 'user@example.com',
+  password: 'SecurePass123!',
+  firstName: 'John',
+  lastName: 'Doe'
+});
+```
+
+### Token Refresh
+
+Tokens are refreshed automatically when they expire. You can also manually refresh:
+
+```typescript
+const newTokens = await client.auth.refresh();
+```
+
+## Wallets
+
+### Create Wallet
+
+```typescript
+const wallet = await client.wallets.create({
+  currencyCode: 'USD'
+});
+```
+
+### List Wallets
+
+```typescript
+const { data, meta } = await client.wallets.list({
+  page: 1,
+  limit: 20,
+  status: 'ACTIVE'
+});
+```
+
+### Get Wallet
+
+```typescript
+const wallet = await client.wallets.get('wal_abc123');
+console.log(wallet.availableBalance);
+```
+
+### Transfer Funds
+
+```typescript
+const transfer = await client.wallets.transfer('wal_abc123', {
+  destinationWalletId: 'wal_def456',
+  amount: 50.00,
+  description: 'Payment for services'
+});
+```
+
+## Cards
+
+### Issue Card
+
+```typescript
+const card = await client.cards.create({
+  walletId: 'wal_abc123',
+  type: 'VIRTUAL',
+  label: 'Shopping Card'
+});
+```
+
+### List Cards
+
+```typescript
+const { data } = await client.cards.list({
+  walletId: 'wal_abc123',
+  status: 'ACTIVE'
+});
+```
+
+### Activate Card
+
+```typescript
+await client.cards.activate('crd_abc123', {
+  activationCode: '1234' // For physical cards
+});
+```
+
+### Block Card
+
+```typescript
+await client.cards.block('crd_abc123', {
+  reason: 'LOST'
+});
+```
+
+## Transactions
+
+### List Transactions
+
+```typescript
+const { data, meta } = await client.transactions.list({
+  walletId: 'wal_abc123',
+  type: 'PURCHASE',
+  startDate: '2024-01-01',
+  endDate: '2024-01-31'
+});
+```
+
+### Get Transaction
+
+```typescript
+const transaction = await client.transactions.get('txn_abc123');
+```
+
+### Refund Transaction
+
+```typescript
+const refund = await client.transactions.refund('txn_abc123', {
+  amount: 25.00,
+  reason: 'Partial return'
+});
+```
+
+## Error Handling
+
+```typescript
+import { PaymentSystemError, ErrorCode } from '@paymentsystem/sdk';
+
+try {
+  await client.wallets.transfer('wal_abc123', {
+    destinationWalletId: 'wal_def456',
+    amount: 1000.00
+  });
+} catch (error) {
+  if (error instanceof PaymentSystemError) {
+    switch (error.code) {
+      case ErrorCode.INSUFFICIENT_FUNDS:
+        console.error('Not enough balance');
+        break;
+      case ErrorCode.LIMIT_EXCEEDED:
+        console.error('Transaction limit exceeded');
+        break;
+      default:
+        console.error(error.message);
+    }
+  }
+}
+```
+
+## TypeScript Support
+
+The SDK includes full TypeScript definitions:
+
+```typescript
+import type {
+  Wallet,
+  Card,
+  Transaction,
+  CreateWalletRequest,
+  TransferFundsRequest
+} from '@paymentsystem/sdk';
+
+const request: CreateWalletRequest = {
+  currencyCode: 'USD'
+};
+
+const wallet: Wallet = await client.wallets.create(request);
+```

@@ -1,0 +1,820 @@
+================================================================================
+                        MONIME API DOCUMENTATION
+                        Complete Reference Guide
+================================================================================
+
+Last Updated: 2025-12-28
+API Version: caph.2025-08-23
+Base URL: https://api.monime.io/
+
+This document contains complete Monime API documentation for quick reference
+when debugging or implementing payment features.
+
+================================================================================
+                            TABLE OF CONTENTS
+================================================================================
+
+1. API BASICS
+   1.1 Core Concepts
+   1.2 Environment (Live vs Test)
+   1.3 Authentication
+   1.4 Standard Headers
+   1.5 Rate Limiting
+   1.6 Pagination
+   1.7 Idempotency
+   1.8 Metadata
+
+2. CHECKOUT SESSION
+   2.1 Overview
+   2.2 Creating Sessions
+   2.3 Payment Flow
+
+3. WEBHOOKS
+   3.1 Structure
+   3.2 Signature Verification
+
+4. API ENDPOINTS
+   4.1 Financial Accounts
+   4.2 Financial Transactions
+   4.3 Internal Transfers
+   4.4 Payments
+   4.5 Payment Codes
+   4.6 Receipts
+   4.7 Banks
+
+5. MCP SERVER (AI Integration)
+
+================================================================================
+                         1. API BASICS
+================================================================================
+
+--------------------------------------------------------------------------------
+1.1 CORE CONCEPTS
+--------------------------------------------------------------------------------
+
+The Monime API is a REST-based payment platform with three fundamental principles:
+
+1. LIVE AND TEST MODES
+   - Live mode: Processes real payments and moves actual funds
+   - Test mode: Sandbox environment for development
+   - Token prefixes: live tokens = "mon_", test tokens = "mon_test_"
+
+2. MULTI-TENANCY BY DESIGN
+   - Every call lives inside a Space (secure, self-contained payment world)
+   - Each space maintains isolated accounts, policies, and event streams
+   - One integration can power many organizations
+
+3. VERSIONING
+   - Format: release_name.date (e.g., caph.2025-08-23)
+   - Changes within a version are backward-compatible
+   - Breaking changes only in new releases
+
+--------------------------------------------------------------------------------
+1.2 ENVIRONMENT (LIVE VS TEST)
+--------------------------------------------------------------------------------
+
+API Endpoint: https://api.monime.io/ (same for both environments)
+
+TEST ENVIRONMENT:
+- Token prefix: mon_test_
+- Uses sandbox accounts and simulated payment rails
+- For development, integration testing, and QA
+
+LIVE ENVIRONMENT:
+- Token prefix: mon_ (NOT mon_test_)
+- Connects to real payment networks
+- For production operations
+
+SWITCHING ENVIRONMENTS:
+- API requests: Based on your access token prefix
+- Dashboard: Toggle Live/Test in your Space dashboard
+
+WEBHOOKS:
+- Environment-specific: Live webhooks receive only production events
+- Test webhooks receive only sandbox events
+
+--------------------------------------------------------------------------------
+1.3 AUTHENTICATION
+--------------------------------------------------------------------------------
+
+Method: Bearer Token Authentication
+
+REQUIRED HEADERS:
+- Authorization: Bearer <access-token>
+- Monime-Space-Id: <space-id>
+
+TOKEN TYPES:
+- Test tokens: mon_test_XXXXXXXXXXXXXXXX
+- Live tokens: mon_XXXXXXXXXXXXXXXX
+
+QUICK VALIDATION:
+curl -X GET https://api.monime.io \
+  --header "Authorization: Bearer <access-token>" \
+  --header "Monime-Space-Id: <monime-space-id>"
+
+Response:
+- isAuthenticated: true = valid token
+- isAuthenticated: false = invalid/expired token
+- environment: "test" or "live"
+
+SECURITY BEST PRACTICES:
+- Keep tokens server-side only
+- Use separate tokens per integration
+- Store in secrets managers (Vault/AWS/GCP)
+- Rotate regularly
+- Never log or hardcode credentials
+
+ERROR CODES:
+- 401 Unauthorized: Missing/invalid/expired token
+- 403 Forbidden: Valid token but insufficient permissions
+
+--------------------------------------------------------------------------------
+1.4 STANDARD HEADERS
+--------------------------------------------------------------------------------
+
+REQUIRED HEADERS:
+
+1. Authorization
+   Bearer token authentication
+   Example: Authorization: Bearer mon_test_xxxxx
+
+2. Content-Type
+   Must be application/json for endpoints with payload
+   Example: Content-Type: application/json
+
+3. Monime-Space-Id
+   Tenancy parameter specifying the Space
+   Example: Monime-Space-Id: spc-1234567890
+
+OPTIONAL HEADERS:
+
+1. Monime-Version
+   Pins behavior to specific API version
+   Example: Monime-Version: caph.2025-08-23
+
+2. Idempotency-Key
+   Unique key per resource creation to prevent duplicates
+   Example: Idempotency-Key: unique-uuid-here
+
+RESPONSE HEADERS:
+
+- Monime-Request-Id: Unique identifier for tracing
+- Monime-Request-Checksum: Deterministic checksum for validation
+- Monime-Request-Timestamp: UTC timestamp of request
+- Monime-Request-Duration: Server-side processing time
+- Monime-Cache: Cache source (e.g., "irc" for idempotent request cache)
+- Monime-Rate-Limit: Rate limit identifier (429 responses only)
+
+WEBHOOK HEADER:
+
+- Monime-Signature: Cryptographic signature with timestamp for verification
+
+--------------------------------------------------------------------------------
+1.5 RATE LIMITING
+--------------------------------------------------------------------------------
+
+RATE LIMITS (Multidimensional):
+
+1. SPACE-BASED LIMIT:
+   - Test mode: 100 requests/second across all space interactions
+   - Live mode: 500 requests/second across all space interactions
+
+2. TOKEN-BASED LIMIT:
+   - Test tokens: 20 requests/second
+   - Live tokens: 80 requests/second
+
+3. ENDPOINT-BASED LIMIT:
+   - Test tokens: 5 requests/second per token per endpoint
+   - Live tokens: 20 requests/second per token per endpoint
+
+ERROR RESPONSE (429 Too Many Requests):
+
+Headers:
+- Monime-Rate-Limit: Identifies which limit triggered
+- Retry-After: Seconds to wait before retrying
+
+BEST PRACTICES:
+- Use webhooks as primary signal; poll sparingly
+- Batch requests and implement smart pagination
+- Issue separate tokens per application/service
+- Cap concurrency and add jitter
+- Monitor the Monime-Rate-Limit header
+
+NOTE: 429s are flow-control signals, not failures
+
+--------------------------------------------------------------------------------
+1.6 PAGINATION
+--------------------------------------------------------------------------------
+
+Type: Cursor-based pagination
+
+REQUEST PARAMETERS:
+- limit: Number of objects per page (1-50, default: 10)
+- after: Opaque cursor (ID of last object from previous page)
+
+Example Request:
+curl "https://api.monime.io/v1/payouts?limit=10&after=pyt-k6GMRZsCr61z" \
+  -H "Authorization: Bearer mon_***"
+
+RESPONSE STRUCTURE:
+{
+  "success": true,
+  "messages": [],
+  "result": [...],
+  "pagination": {
+    "count": <num-of-objects-in-page>,
+    "next": "<next-page-cursor>"
+  }
+}
+
+PAGINATION LOGIC:
+- If pagination.next exists: More results available
+- If pagination.next is null: End of collection
+
+BEST PRACTICES:
+- Start with limit=30-50 for bulk operations
+- Always use pagination.next, never fabricate cursors
+- Keep query filters consistent throughout pagination
+- Implement 50-200ms delays between requests
+- Cap parallel requests per token
+
+--------------------------------------------------------------------------------
+1.7 IDEMPOTENCY
+--------------------------------------------------------------------------------
+
+PURPOSE:
+Ensures executing the same request multiple times produces identical results.
+Protects against duplicates when network failures prevent response delivery.
+
+HOW MONIME IMPLEMENTS:
+
+1. SPACE-SCOPED DESIGN:
+   Keys are scoped to individual Spaces, preventing collisions
+
+2. DUAL-LAYER PROTECTION:
+   - High-speed cache (24 hours): Instant retrieval during retries
+   - Last-mile enforcement: Transaction-level deduplication (indefinite)
+
+3. IMPORTANT: Monime does NOT cache API errors - failed requests bypass idempotency
+
+CONFLICT DETECTION:
+- Reusing key with different parameters = 409 Conflict
+- Reason: idempotency_key_in_use
+
+ADDING THE HEADER:
+curl --request POST \
+  --url https://api.monime.io/v1/payouts \
+  --header 'Idempotency-Key: <idempotency-key>' \
+  --header 'Monime-Space-Id: <monime-space-id>'
+
+GENERATING KEYS (UUID approach - recommended):
+import { v4 as uuidv4 } from 'uuid';
+const idempotencyKey = uuidv4();
+
+RETRY LOGIC PATTERN:
+async function createPayoutWithRetry(data, idempotencyKey, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch('https://api.monime.io/v1/payouts', {
+        method: 'POST',
+        headers: {
+          'Idempotency-Key': idempotencyKey,
+        },
+        body: JSON.stringify(data)
+      });
+
+      if (response.ok) return await response.json();
+      if (response.status === 409) throw new Error('Key already used');
+      if (response.status >= 500) {
+        await sleep(Math.pow(2, attempt) * 1000);
+        continue;
+      }
+    } catch (error) {
+      if (attempt === maxRetries) throw error;
+      await sleep(Math.pow(2, attempt) * 1000);
+    }
+  }
+}
+
+BEST PRACTICES:
+- Use unique keys per logical operation
+- Keep keys between 25-64 characters
+- Send identical requests on retries
+- Persist keys client-side with business operation IDs
+- Success: Reuse keys for confirmation
+- 409 Conflict: Generate new key and fix caller logic
+- 5xx/Timeout: Retry with same key (errors aren't cached)
+- Never store sensitive info in keys
+
+--------------------------------------------------------------------------------
+1.8 METADATA
+--------------------------------------------------------------------------------
+
+PURPOSE:
+Developer-controlled extension field for custom key-value pairs.
+Monime stores and returns metadata without interpreting it.
+
+STRUCTURE:
+- Always flat: keys map directly to values
+- No nested JSON or arrays
+
+UPDATES:
+- Omitting a key: preserves its value
+- Sending a key: updates it
+- Using null or empty string: removes it
+
+LIMITATIONS:
+| Aspect            | Rule                              |
+|-------------------|-----------------------------------|
+| Maximum pairs     | 64 key-value entries per object   |
+| Key length        | 64 characters maximum             |
+| Value length      | 100 characters maximum            |
+| Allowed chars     | [a-zA-Z0-9_-] only               |
+| Reserved prefixes | Cannot start with _, -, or monime |
+
+USE CASES:
+- Reconciliation: Attach order IDs or invoice numbers
+- Operational tagging: Mark by branch/campaign
+- Flexible extensions: Priority flags, batch identifiers
+
+BEST PRACTICES:
+- Use predictable, consistent key naming
+- Keep values concise (IDs, short tags only)
+- Never store sensitive data or credentials
+- Treat as context/annotations, not system of record
+- For hierarchies, encode in key names (e.g., contact_phone_number)
+
+================================================================================
+                         2. CHECKOUT SESSION
+================================================================================
+
+--------------------------------------------------------------------------------
+2.1 OVERVIEW
+--------------------------------------------------------------------------------
+
+A Checkout Session is a short-lived object that creates a hosted checkout page
+for collecting payments without building custom payment UI.
+
+USE WHEN:
+- Fast, secure payments with minimal UI work
+- Need hosted page with multiple payment methods
+- Want Monime to handle payment state, redirection, and receipts
+
+--------------------------------------------------------------------------------
+2.2 CREATING SESSIONS
+--------------------------------------------------------------------------------
+
+KEY PARAMETERS:
+
+| Parameter        | Purpose                                    |
+|------------------|-------------------------------------------|
+| amount           | Total in smallest currency unit           |
+| currency         | Payment currency (e.g., SLE)              |
+| payment_methods  | Allowed options (mobile money, bank, card)|
+| success_url      | Redirect after successful payment         |
+| cancel_url       | Redirect after cancellation               |
+| metadata         | Optional key/value pairs for context      |
+
+--------------------------------------------------------------------------------
+2.3 PAYMENT FLOW
+--------------------------------------------------------------------------------
+
+1. CREATE SESSION (Server)
+   Your backend calls API with amount, currency, and options
+
+2. REDIRECT CUSTOMER
+   Direct user to hosted checkout URL from session response
+
+3. CUSTOMER PAYS
+   Payment occurs on Monime's secure page
+
+4. WEBHOOK + RETURN
+   Receive status via webhook and/or customer redirect
+
+IMPORTANT: Handle payment lifecycle via webhooks to ensure updates even if
+customer closes browser before redirect.
+
+================================================================================
+                         3. WEBHOOKS
+================================================================================
+
+--------------------------------------------------------------------------------
+3.1 STRUCTURE
+--------------------------------------------------------------------------------
+
+Webhooks deliver environment-specific events:
+- Live webhooks: Only production events
+- Test webhooks: Only sandbox events
+
+--------------------------------------------------------------------------------
+3.2 SIGNATURE VERIFICATION
+--------------------------------------------------------------------------------
+
+Header: Monime-Signature
+
+Contains cryptographic signature with timestamp for:
+- Verifying request came from Monime
+- Confirming body wasn't tampered with
+- Ensuring freshness (replay-safe)
+
+================================================================================
+                         4. API ENDPOINTS
+================================================================================
+
+--------------------------------------------------------------------------------
+4.1 FINANCIAL ACCOUNTS
+--------------------------------------------------------------------------------
+
+A Financial Account represents a logical wallet/ledger that holds money.
+
+OBJECT SCHEMA:
+| Field       | Type   | Description                           |
+|-------------|--------|---------------------------------------|
+| id          | string | Unique identifier                     |
+| uvan        | string | Universal Virtual Account Number      |
+| name        | string | Human-readable label                  |
+| currency    | string | ISO 4217 code (SLE, USD)             |
+| reference   | string | Optional external reference ID        |
+| description | string | Optional purpose description          |
+| balance     | object | Available funds (currency + value)    |
+| createTime  | string | Creation timestamp                    |
+| updateTime  | string | Last modification timestamp           |
+| metadata    | object | Custom key-value pairs                |
+
+BALANCE STRUCTURE:
+{
+  "available": {
+    "currency": "SLE",
+    "value": 100  // Minor unit (100 = 1 SLE)
+  }
+}
+
+--- LIST FINANCIAL ACCOUNTS ---
+
+GET /v1/financial-accounts
+
+Query Parameters:
+- uvan: Filter by UVAN (max 16 chars)
+- reference: Filter by external reference (max 64 chars)
+- withBalance: Include balances in response (boolean)
+- limit: Items per page (1-50, default 10)
+- after: Pagination cursor
+
+Headers:
+- Monime-Space-Id (required)
+- Authorization: Bearer <token> (required)
+
+--- CREATE FINANCIAL ACCOUNT ---
+
+POST /v1/financial-accounts
+
+Required Body:
+{
+  "name": "Main Wallet",      // max 100 chars
+  "currency": "SLE"           // ISO 4217 code
+}
+
+Optional Body:
+{
+  "reference": "ext-123",     // max 64 chars
+  "description": "Purpose",   // max 150 chars
+  "metadata": {}
+}
+
+Required Headers:
+- Authorization: Bearer <token>
+- Idempotency-Key: <unique-key>
+- Monime-Space-Id: <space-id>
+
+--------------------------------------------------------------------------------
+4.2 FINANCIAL TRANSACTIONS
+--------------------------------------------------------------------------------
+
+--- LIST FINANCIAL TRANSACTIONS ---
+
+GET /v1/financial-transactions
+
+Query Parameters:
+- financialAccountId: Filter by account ID
+- reference: Filter by transaction reference
+- type: Filter by "credit" or "debit"
+- limit: Results per page (1-50, default 10)
+- after: Pagination cursor
+
+Response includes:
+- id: Unique transaction identifier
+- type: "credit" or "debit"
+- amount: { currency, value }
+- timestamp: ISO 8601 datetime
+- reference: Internal transaction reference
+- financialAccount: Account details with post-transaction balance
+- ownershipGraph: Traceability chain
+
+--------------------------------------------------------------------------------
+4.3 INTERNAL TRANSFERS
+--------------------------------------------------------------------------------
+
+Move funds between financial accounts within the Monime ecosystem.
+
+--- CREATE INTERNAL TRANSFER ---
+
+POST /v1/internal-transfers
+
+Request Body:
+{
+  "amount": {
+    "currency": "SLE",
+    "value": 1000
+  },
+  "sourceFinancialAccount": {
+    "id": "fa-source-id"
+  },
+  "destinationFinancialAccount": {
+    "id": "fa-dest-id"
+  },
+  "description": "Transfer purpose",  // optional, max 150 chars
+  "metadata": {}                      // optional
+}
+
+Required Headers:
+- Authorization: Bearer <token>
+- Idempotency-Key: <unique-key>
+- Monime-Space-Id: <space-id>
+
+Response:
+{
+  "success": true,
+  "result": {
+    "id": "it-xxx",
+    "status": "pending|processing|failed|completed",
+    "amount": { "currency": "SLE", "value": 1000 },
+    "sourceFinancialAccount": { "id": "..." },
+    "destinationFinancialAccount": { "id": "..." },
+    "financialTransactionReference": "...",
+    "failureDetail": {
+      "code": "unknown|fund_insufficient",
+      "message": "..."
+    },
+    "createTime": "...",
+    "updateTime": "..."
+  }
+}
+
+--- LIST INTERNAL TRANSFERS ---
+
+GET /v1/internal-transfers
+
+Query Parameters:
+- status: pending|processing|failed|completed
+- sourceFinancialAccountId: Filter by source
+- destinationFinancialAccountId: Filter by destination
+- financialTransactionReference: Filter by reference
+- limit: 1-50 (default 10)
+- after: Pagination cursor
+
+--------------------------------------------------------------------------------
+4.4 PAYMENTS
+--------------------------------------------------------------------------------
+
+--- LIST PAYMENTS ---
+
+GET /v1/payments
+
+Query Parameters:
+- orderNumber: Filter by order number
+- financialAccountId: Filter by receiving account
+- financialTransactionReference: Filter by transaction reference
+- limit: 1-50 (default 10)
+- after: Pagination cursor
+
+Response includes:
+- id, status (pending/processing/completed)
+- amount: { currency, value }
+- channel: Payment method details (bank, card, momo, wallet)
+- name, reference, orderNumber
+- financialAccountId, financialTransactionReference
+- fees: Array of applied charges
+- timestamps, ownership metadata
+
+--- GET PAYMENT ---
+
+GET /v1/payments/{id}
+
+Path Parameter:
+- id: Payment ID to retrieve
+
+Returns full payment object with all details.
+
+--------------------------------------------------------------------------------
+4.5 PAYMENT CODES
+--------------------------------------------------------------------------------
+
+A Payment Code is a programmable, short-lived token for collecting payments
+through USSD or QR-based flows.
+
+OBJECT SCHEMA:
+| Field                   | Type    | Description                        |
+|-------------------------|---------|-----------------------------------|
+| id                      | string  | Unique identifier                 |
+| mode                    | enum    | "one_time" or "recurrent"        |
+| status                  | enum    | pending/processing/expired/etc   |
+| name                    | string  | Human-readable label              |
+| amount                  | object  | Currency and value per use        |
+| enable                  | boolean | Whether code is active            |
+| expireTime              | string  | Expiration timestamp              |
+| customer                | object  | Associated customer info          |
+| ussdCode                | string  | USSD dial string for payments     |
+| reference               | string  | Transaction tagging reference     |
+| authorizedProviders     | array   | Permitted mobile money providers  |
+| authorizedPhoneNumber   | string  | Restricted MSISDN                 |
+| recurrentPaymentTarget  | object  | Count/amount threshold            |
+| financialAccountId      | string  | Settlement account                |
+
+--- CREATE PAYMENT CODE ---
+
+POST /v1/payment-codes
+
+Required Body:
+{
+  "name": "Checkout Code"     // 3-64 chars
+}
+
+Optional Body:
+{
+  "mode": "one_time",         // or "recurrent"
+  "amount": {
+    "currency": "SLE",
+    "value": 1000
+  },
+  "duration": "10m",          // Validity period
+  "authorizedProviders": ["m17", "m18"],
+  "customer": { "name": "John" },
+  "recurrentPaymentTarget": { ... }
+}
+
+Required Headers:
+- Authorization: Bearer <token>
+- Idempotency-Key: <unique-key>
+- Monime-Space-Id: <space-id>
+
+Response includes ussdCode for customer payment.
+
+USE CASES:
+- USSD collection: Display codes for customer redemption
+- QR checkout: Encode for immediate payment
+- Subscriptions: Accept multiple payments toward targets
+- Restrictions: Provider or phone-specific access
+
+--------------------------------------------------------------------------------
+4.6 RECEIPTS
+--------------------------------------------------------------------------------
+
+--- REDEEM RECEIPT ---
+
+POST /v1/receipts/{orderNumber}/redeem
+
+Path Parameter:
+- orderNumber: Receipt identifier (max 20 chars)
+
+Request Body:
+{
+  "redeemAll": true,          // Redeem all entitlements
+  // OR
+  "entitlements": [           // Specific entitlements
+    { "key": "...", "units": 1 }
+  ],
+  "metadata": {}
+}
+
+Required Headers:
+- Authorization: Bearer <token>
+- Idempotency-Key: <unique-key>
+- Monime-Space-Id: <space-id>
+
+NOTE: Bulk redemption is atomic - if any entitlement is exhausted,
+entire operation is rejected.
+
+--------------------------------------------------------------------------------
+4.7 BANKS
+--------------------------------------------------------------------------------
+
+--- LIST BANKS ---
+
+GET /v1/banks
+
+Query Parameters:
+- country (required): ISO 3166-1 alpha-2 code (e.g., "SL", "GH")
+- limit: 1-50 (default 10)
+- after: Pagination cursor
+
+Response Bank Object:
+- providerId: Monime-assigned identifier
+- name: Bank name
+- country: Country code
+- status: Active/inactive
+- featureSet: Supported capabilities (payout, payment, KYC)
+- createTime, updateTime
+
+================================================================================
+                         5. MCP SERVER (AI Integration)
+================================================================================
+
+The Monime MCP (Model Context Protocol) server provides AI assistants with
+direct access to documentation.
+
+SERVER URL: https://docs.monime.io/mcp
+
+KEY FEATURES:
+- Documentation search across all pages
+- API integration via OpenAPI specs
+- Real-time updates with documentation changes
+- Works with MCP-compatible AI clients
+
+SUPPORTED AI CLIENTS:
+- Claude Desktop (3.5 Sonnet and newer)
+- Cursor (latest versions)
+- Other MCP clients (Goose, Continue)
+
+CLAUDE DESKTOP SETUP:
+1. Settings > Connectors
+2. Add custom connector: "Monime Documentation"
+3. URL: https://docs.monime.io/mcp
+4. Save and test
+
+SECURITY:
+- HTTPS encryption
+- Read-only access to public docs
+- No authentication required
+- No credential storage
+
+================================================================================
+                         QUICK REFERENCE
+================================================================================
+
+BASE URL: https://api.monime.io/
+
+REQUIRED HEADERS (All Requests):
+Authorization: Bearer <token>
+Monime-Space-Id: <space-id>
+Content-Type: application/json
+
+OPTIONAL HEADERS:
+Monime-Version: caph.2025-08-23
+Idempotency-Key: <unique-uuid>
+
+TOKEN PREFIXES:
+- Test: mon_test_
+- Live: mon_
+
+COMMON STATUS CODES:
+- 200: Success
+- 401: Unauthorized (invalid token)
+- 403: Forbidden (insufficient permissions)
+- 409: Conflict (idempotency key reused)
+- 429: Rate limited (check Retry-After header)
+- 5xx: Server error (retry with same idempotency key)
+
+MAIN ENDPOINTS:
+- GET/POST /v1/financial-accounts
+- GET /v1/financial-transactions
+- GET/POST /v1/internal-transfers
+- GET /v1/payments
+- GET/POST /v1/payment-codes
+- POST /v1/receipts/{orderNumber}/redeem
+- GET /v1/banks
+
+================================================================================
+                         TROUBLESHOOTING
+================================================================================
+
+PAYMENT NOT PROCESSING:
+1. Check token is correct environment (test vs live)
+2. Verify Monime-Space-Id header is set
+3. Check webhook endpoint is receiving events
+4. Confirm financial account has sufficient balance
+
+401 UNAUTHORIZED:
+1. Token may be expired - generate new one
+2. Check token prefix matches environment
+3. Verify token has required scopes
+
+403 FORBIDDEN:
+1. Token valid but lacks permissions
+2. Check user's role in the Space
+3. Verify Space ID is correct
+
+429 RATE LIMITED:
+1. Check Retry-After header for wait time
+2. Implement exponential backoff
+3. Use webhooks instead of polling
+4. Consider batching requests
+
+IDEMPOTENCY ISSUES:
+1. 409 Conflict = key already used with different params
+2. Generate new key for genuinely new request
+3. Use same key for retries of same request
+4. Remember: errors are NOT cached
+
+================================================================================
+                         END OF DOCUMENTATION
+================================================================================

@@ -1,0 +1,171 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Peeap Documentation",
+  "colors": {
+    "primary": "#2563EB",
+    "light": "#3B82F6",
+    "dark": "#1D4ED8"
+  },
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": ["introduction", "quickstart", "authentication"]
+          },
+          {
+            "group": "Verify API",
+            "pages": ["verify/overview"]
+          },
+          {
+            "group": "Integration Guide",
+            "pages": [
+              "guide/overview",
+              "guide/what-is-peeap-pay",
+              "guide/test-vs-live",
+              "guide/get-your-keys",
+              "guide/create-a-checkout",
+              "guide/redirect-the-customer",
+              "guide/confirm-the-payment"
+            ]
+          },
+          {
+            "group": "Going to Production",
+            "pages": [
+              "guide/confirming-payments",
+              "guide/idempotency",
+              "guide/handling-failures",
+              "guide/reconciliation",
+              "guide/webhooks"
+            ]
+          },
+          {
+            "group": "Recipes",
+            "pages": [
+              "guide/recipes-overview",
+              "guide/recipe-ecommerce",
+              "guide/recipe-school-fees",
+              "guide/recipe-wallet-topup",
+              "guide/recipe-pos-qr"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": ["guide/reference"]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/wallets",
+              "concepts/cards",
+              "concepts/transactions",
+              "concepts/kyc"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": ["api-reference/introduction"]
+          },
+          {
+            "group": "Authentication",
+            "pages": [
+              "api-reference/auth/register",
+              "api-reference/auth/login",
+              "api-reference/auth/refresh",
+              "api-reference/auth/logout"
+            ]
+          },
+          {
+            "group": "Wallets",
+            "pages": [
+              "api-reference/wallets/list",
+              "api-reference/wallets/create",
+              "api-reference/wallets/get",
+              "api-reference/wallets/transfer"
+            ]
+          },
+          {
+            "group": "Cards",
+            "pages": [
+              "api-reference/cards/list",
+              "api-reference/cards/create",
+              "api-reference/cards/activate",
+              "api-reference/cards/block"
+            ]
+          },
+          {
+            "group": "Transactions",
+            "pages": [
+              "api-reference/transactions/list",
+              "api-reference/transactions/get",
+              "api-reference/transactions/refund"
+            ]
+          },
+          {
+            "group": "Schools",
+            "pages": [
+              "api-reference/schools/overview",
+              "api-reference/schools/students",
+              "api-reference/schools/vendors",
+              "api-reference/schools/products",
+              "api-reference/schools/payments",
+              "api-reference/schools/peeap-integration"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Plugin Apps",
+        "groups": [
+          {
+            "group": "Plugin Apps",
+            "pages": [
+              "plugins/overview",
+              "plugins/manifest",
+              "plugins/sdk-reference",
+              "plugins/playground",
+              "plugins/submission"
+            ]
+          },
+          {
+            "group": "SDKs",
+            "pages": ["sdks/overview", "sdks/javascript", "sdks/python"]
+          },
+          {
+            "group": "Webhooks",
+            "pages": ["webhooks/overview", "webhooks/events", "webhooks/signatures"]
+          }
+        ]
+      }
+    ]
+  },
+  "navbar": {
+    "links": [
+      { "label": "Support", "href": "mailto:support@peeap.com" }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Dashboard",
+      "href": "https://peeap.com/login"
+    }
+  },
+  "footer": {
+    "socials": {
+      "x": "https://twitter.com/paborasl",
+      "linkedin": "https://www.linkedin.com/company/peeap"
+    }
+  }
+}

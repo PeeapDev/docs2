@@ -1,0 +1,111 @@
+---
+title: "9 · Failures, timeouts & edge cases"
+description: "The states between 'created' and 'paid' that quietly lose money."
+---
+
+# Chapter 9 · Failures, timeouts & edge cases
+
+Most of a payment integration is the happy path. Most of the *bugs* are the other
+states. This chapter walks the things that go wrong and how to handle each so no
+payment is silently lost or double-counted.
+
+## The session lifecycle, completely
+
+A checkout session is only ever in one of three states:
+
+| Status | Meaning | Final? |
+| --- | --- | --- |
+| `OPEN` | Created, awaiting payment. | No — will become `COMPLETE` or `EXPIRED`. |
+| `COMPLETE` | Paid; funds in your wallet. | Yes. |
+| `EXPIRED` | 30 minutes passed without payment. | Yes. |
+
+Everything below is about getting every session safely to one of the two **final**
+states in your own records.
+
+## Edge cases and what to do
+
+<AccordionGroup>
+  <Accordion title="The create call times out (you got no response)">
+    You don't know if the session was created. **Retry the exact same call with the
+    same `idempotencyKey`** ([Chapter 8](/guide/idempotency)). If the first attempt
+    did create a session, you get it back; if it didn't, you get a fresh one. Either
+    way you end with exactly one session.
+  </Accordion>
+
+  <Accordion title="The customer pays but never returns to your site">
+    Expected and harmless. The browser redirect is just UX — your **reconciler**
+    ([Chapter 7](/guide/confirming-payments)) re-checks the stored `sessionId`,
+    sees `COMPLETE`, and fulfils. This is exactly why you store every session and
+    don't depend on the redirect.
+  </Accordion>
+
+  <Accordion title="The customer returns with ?status=success but the session is still OPEN">
+    Settlement can lag the redirect by seconds. Treat the redirect as "probably
+    done" — show a confirming spinner and poll the session a few times. If it's
+    still `OPEN` when the foreground poll gives up, hand off to the reconciler; do
+    **not** fulfil on the redirect alone.
+  </Accordion>
+
+  <Accordion title="The customer claims they paid but the session is EXPIRED">
+    An `EXPIRED` session took no money — there's nothing to fulfil. If they really
+    were debited, that's a payment against a *different* session or a provider-side
+    issue; direct them to support rather than shipping on their word.
+  </Accordion>
+
+  <Accordion title="Your fulfilment runs twice (poll + reconciler both fire)">
+    Handled by idempotent fulfilment ([Chapter 8](/guide/idempotency)): the atomic
+    `OPEN → PAID` claim means only the first one ships. Make sure every fulfilment
+    path goes through that guard.
+  </Accordion>
+
+  <Accordion title="The amount or reference doesn't match your order">
+    Never fulfil on a mismatch. Compare `session.amount` and `session.reference`
+    against your own stored expectation, and route mismatches to a manual-review
+    queue instead of shipping.
+  </Accordion>
+
+  <Accordion title="You sent a live redirectUrl pointing at localhost">
+    Peeap rejects `localhost` / `127.0.0.1` redirect URLs in **live** mode (it
+    falls back to a default). Use a real, reachable HTTPS URL in production; keep
+    `localhost` for test mode only.
+  </Accordion>
+</AccordionGroup>
+
+## Be defensive about every Peeap call
+
+Network calls fail. Wrap them so a transient error never corrupts your order
+state:
+
+```javascript
+async function getSessionSafe(sessionId) {
+  try {
+    const res = await fetch(
+      `https://api.peeap.com/api/checkout/sessions/${sessionId}`
+    );
+    if (!res.ok) return { status: "UNKNOWN", httpStatus: res.status };
+    return await res.json();
+  } catch {
+    return { status: "UNKNOWN" }; // network error — try again next cycle
+  }
+}
+```
+
+The important property: an error returns `UNKNOWN`, which your reconciler simply
+re-checks next cycle. It must **never** be treated as `EXPIRED` (you'd abandon a
+real payment) or as `COMPLETE` (you'd ship for free).
+
+<Warning>
+**Fail closed, not open.** When you can't determine a payment's state, the safe
+default is "not paid yet, check again" — never "assume paid." A retried check
+costs nothing; a wrongly-assumed completion costs goods.
+</Warning>
+
+## A note on money already collected
+
+If something genuinely went wrong *after* the customer was charged — your server
+fulfilled the wrong thing, or you need to return funds — that's a refund/support
+matter, handled through Peeap support today rather than a self-serve refunds API.
+Record enough on each order (`sessionId`, `reference`, amount, timestamps) that you
+can prove what happened. That record is the subject of the next chapter.
+
+Continue to [Chapter 10 → Reconciliation](/guide/reconciliation).

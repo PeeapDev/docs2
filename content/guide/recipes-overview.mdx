@@ -1,0 +1,35 @@
+---
+title: "Recipes"
+description: "Complete, copy-pasteable integrations for the four most common Peeap Pay use cases."
+---
+
+# Recipes
+
+Parts 1–3 taught you the building blocks. This part puts them together into
+**complete, working projects** — one per common use case. Each recipe is
+self-contained: copy it, swap in your keys, and adapt.
+
+Every recipe follows the same proven spine you already know — create a session,
+send the customer to pay, **confirm server-side, fulfil idempotently, reconcile** —
+so they reinforce the habits from Part 3 rather than inventing new ones.
+
+<CardGroup cols={2}>
+  <Card title="E-commerce checkout" icon="cart-shopping" href="/guide/recipe-ecommerce">
+    An online store charging for an order. The canonical example.
+  </Card>
+  <Card title="School fee payment" icon="graduation-cap" href="/guide/recipe-school-fees">
+    A school portal collecting fees into the school's wallet.
+  </Card>
+  <Card title="In-app wallet top-up" icon="wallet" href="/guide/recipe-wallet-topup">
+    Letting a user add money to their balance inside your app.
+  </Card>
+  <Card title="POS / QR scan-to-pay" icon="qrcode" href="/guide/recipe-pos-qr">
+    A counter or device showing a QR the customer scans to pay.
+  </Card>
+</CardGroup>
+
+<Note>
+All four recipes assume you've read [Part 3](/guide/confirming-payments). The
+confirmation, idempotency, and reconciliation patterns are not repeated in full
+inside each recipe — they apply to all of them.
+</Note>

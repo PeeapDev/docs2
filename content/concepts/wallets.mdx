@@ -1,0 +1,113 @@
+---
+title: Wallets
+description: "Digital wallets for storing and managing funds"
+---
+
+# Wallets
+
+Wallets are digital containers that hold user funds. Each wallet is associated with a specific currency and can be linked to multiple cards.
+
+## Wallet Structure
+
+```json
+{
+  "id": "wal_abc123",
+  "externalId": "wal_1234567890",
+  "ownerId": "usr_xyz789",
+  "ownerType": "USER",
+  "currencyCode": "USD",
+  "availableBalance": 1000.00,
+  "heldBalance": 50.00,
+  "status": "ACTIVE",
+  "dailyLimit": 5000.00,
+  "monthlyLimit": 50000.00,
+  "createdAt": "2024-01-15T10:30:00Z"
+}
+```
+
+## Balance Types
+
+| Type | Description |
+|------|-------------|
+| Available Balance | Funds that can be spent or transferred |
+| Held Balance | Funds reserved for pending transactions |
+| Total Balance | Available + Held balance |
+
+## Wallet Statuses
+
+| Status | Description |
+|--------|-------------|
+| `ACTIVE` | Wallet can send and receive funds |
+| `FROZEN` | Wallet cannot send funds but can receive |
+| `CLOSED` | Wallet is permanently closed |
+
+## Transaction Limits
+
+Wallets support configurable limits:
+
+- **Daily Limit**: Maximum amount that can be transacted per day
+- **Monthly Limit**: Maximum amount per calendar month
+- **Single Transaction Limit**: Maximum per transaction
+
+<Info>
+  Limits are based on KYC verification level. Higher KYC tiers allow higher limits.
+</Info>
+
+## Common Operations
+
+### Create a Wallet
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/wallets \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "currencyCode": "USD"
+  }'
+```
+
+### Get Wallet Balance
+
+```bash
+curl https://api.paymentsystem.com/v1/wallets/wal_abc123 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### Deposit Funds
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/wallets/wal_abc123/deposit \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 100.00,
+    "source": "BANK_TRANSFER",
+    "reference": "DEP123456"
+  }'
+```
+
+### Transfer Between Wallets
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/wallets/wal_abc123/transfer \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "destinationWalletId": "wal_def456",
+    "amount": 50.00,
+    "description": "Payment for services"
+  }'
+```
+
+## Multi-Currency Support
+
+Users can have multiple wallets in different currencies:
+
+- USD (US Dollar)
+- EUR (Euro)
+- GBP (British Pound)
+- Additional currencies based on configuration
+
+<Warning>
+  Currency conversion between wallets may incur FX fees. Check current rates before converting.
+</Warning>

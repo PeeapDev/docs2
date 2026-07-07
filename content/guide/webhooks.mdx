@@ -1,0 +1,195 @@
+---
+title: "11 · Webhooks"
+description: "What the webhook system does today, what it doesn't yet, and how to verify a signature."
+---
+
+# Chapter 11 · Webhooks
+
+A webhook is Peeap calling **you**: instead of your server polling
+"is it paid yet?", Peeap POSTs your server the moment something happens. It's the
+ideal way to learn about a completed payment — when it's wired up.
+
+This chapter is deliberately honest about what's live today versus what's coming,
+because building on a notification you won't receive is how money goes missing.
+
+## Status today: read this carefully
+
+<Warning>
+**For storefront / POS merchant checkout, Peeap does not currently deliver a
+webhook when a payment completes.**
+
+The general merchant webhook infrastructure exists — you can register an endpoint,
+and the signing and retry logic are implemented — but the checkout completion code
+does **not** emit an event to it yet. So for the e-commerce and POS recipes:
+
+- ✅ You may register an endpoint and verify signatures (useful to be ready).
+- ❌ You must **not** rely on a webhook to fulfil checkout orders today.
+- ✅ **Server-side polling + a reconciler ([Chapters 7](/guide/confirming-payments)
+  and [10](/guide/reconciliation)) remains the source of truth.**
+
+When merchant checkout webhooks go live, they become an *optimisation* on top of
+your polling — they let you fulfil faster — not a replacement for the reconciler.
+</Warning>
+
+<Note>
+**School integrations are the exception — their webhooks work today.** If you're
+building a school system, Peeap **does** POST events (`fee.paid`, `invoice.paid`,
+`transaction.completed`) to a registered school endpoint, signed with
+`X-Peeap-Signature: sha256=<hmac>`. That's a separate, fully-wired delivery path.
+See the [school fees recipe](/guide/recipe-school-fees) and
+`SCHOOL_API_DOCUMENTATION.md`. The rest of this chapter is about the *general
+merchant* webhook system.
+</Note>
+
+## Registering an endpoint
+
+You register a URL and the events you care about:
+
+```http
+POST https://api.peeap.com/api/v1/webhooks
+Content-Type: application/json
+```
+
+```json
+{
+  "url": "https://yourstore.com/webhooks/peeap",
+  "events": ["payment.completed"]
+}
+```
+
+The response includes a **signing secret**, shown **once**:
+
+```json
+{
+  "id": "we_...",
+  "url": "https://yourstore.com/webhooks/peeap",
+  "events": ["payment.completed"],
+  "secret": "whsec_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+}
+```
+
+<Note>
+Copy the `whsec_…` secret immediately and store it like a password — it isn't
+shown again. You'll use it to verify that incoming webhooks are genuinely from
+Peeap.
+</Note>
+
+## The delivery format
+
+When an event fires, Peeap sends an HTTP `POST` to your URL with:
+
+- **Header** `X-Webhook-Signature: t=<timestamp>,v1=<signature>`
+- **Body** a JSON payload describing the event
+
+Peeap **retries** failed deliveries with exponential backoff (roughly 1, 2, 4, 8…
+minutes, up to a handful of attempts) before giving the endpoint up, so your
+handler must tolerate receiving the same event more than once — i.e. be idempotent
+([Chapter 8](/guide/idempotency)).
+
+## Verifying the signature (do this on every webhook)
+
+A webhook endpoint is a public URL — anyone can POST to it. **Never act on a
+webhook you haven't verified.** Peeap signs each delivery with HMAC-SHA256 over the
+string `"{timestamp}.{rawBody}"`, using your `whsec_…` secret.
+
+<CodeGroup>
+
+```javascript Node.js / Express
+import crypto from "crypto";
+
+// IMPORTANT: verify against the RAW body, before any JSON parsing/reserialising.
+app.post(
+  "/webhooks/peeap",
+  express.raw({ type: "application/json" }),
+  (req, res) => {
+    const header = req.headers["x-webhook-signature"]; // "t=...,v1=..."
+    const secret = process.env.PEEAP_WEBHOOK_SECRET;    // whsec_...
+
+    const parts = Object.fromEntries(
+      header.split(",").map((kv) => kv.split("="))
+    );
+    const signedPayload = `${parts.t}.${req.body.toString("utf8")}`;
+
+    const expected = crypto
+      .createHmac("sha256", secret)
+      .update(signedPayload)
+      .digest("hex");
+
+    const ok =
+      expected.length === parts.v1.length &&
+      crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(parts.v1));
+
+    if (!ok) return res.status(400).send("bad signature");
+
+    // Verified. Be idempotent, then ACK fast.
+    const event = JSON.parse(req.body.toString("utf8"));
+    handleEvent(event); // do real work async; don't block the response
+    res.status(200).send("ok");
+  }
+);
+```
+
+```python Python / Flask
+import hmac, hashlib, os
+from flask import request, abort
+
+@app.post("/webhooks/peeap")
+def peeap_webhook():
+    header = request.headers.get("X-Webhook-Signature", "")  # "t=...,v1=..."
+    secret = os.environ["PEEAP_WEBHOOK_SECRET"]              # whsec_...
+
+    parts = dict(kv.split("=") for kv in header.split(","))
+    raw = request.get_data(as_text=True)                    # RAW body
+    signed = f"{parts['t']}.{raw}"
+
+    expected = hmac.new(secret.encode(), signed.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, parts["v1"]):
+        abort(400)
+
+    # Verified — be idempotent, then return 200 quickly.
+    handle_event(request.get_json())
+    return "ok", 200
+```
+
+</CodeGroup>
+
+<Warning>
+**Three rules for webhook handlers:**
+1. **Verify against the raw body.** Re-serialising the JSON changes the bytes and
+   breaks the signature. Capture the raw request body before parsing.
+2. **Use a constant-time compare** (`timingSafeEqual` / `compare_digest`), never
+   `==`, to avoid timing attacks.
+3. **Respond `200` fast and do the work idempotently.** Slow handlers trigger
+   retries — and retries mean you'll see the same event twice.
+</Warning>
+
+## Recommended pattern: webhook *and* reconciler
+
+The robust production setup uses both, with polling as the floor:
+
+- **Reconciler (always on)** — the source of truth today, and your safety net
+  forever. It catches anything a webhook misses.
+- **Webhook (when available)** — when it fires, treat it as "check this session
+  now": look up the session, run the *same* idempotent fulfilment your reconciler
+  uses. The webhook just makes you faster; it never bypasses your verification.
+
+That way the day Peeap turns on checkout webhooks, you flip them on for speed and
+nothing else in your code has to change — and if a webhook is ever dropped, your
+reconciler already has you covered.
+
+## End of Part 3
+
+You now have the complete picture: a correct first integration (Part 2) hardened
+against the real world (Part 3) — polling as the source of truth, idempotency
+everywhere, a reconciler that owns the ledger, and webhook verification ready for
+when delivery lands.
+
+<CardGroup cols={2}>
+  <Card title="Recipes" icon="book" href="/guide/overview">
+    Full worked examples — e-commerce, school fees, wallet top-up, POS / QR.
+    *(Coming next.)*
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/introduction">
+    Endpoint-by-endpoint details for lookup.
+  </Card>
+</CardGroup>

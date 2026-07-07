@@ -1,0 +1,129 @@
+---
+title: Manifest Spec
+description: "Every plugin bundle must include a peeap-manifest.json file"
+---
+
+# Plugin Manifest
+
+Every plugin bundle must include a `peeap-manifest.json` in the zip root. This tells the platform what your app needs.
+
+## Bundle Structure
+
+```
+my-app.zip
+├── peeap-manifest.json    # Required
+├── index.js               # ESM entry point (default export = React component)
+├── icon.svg               # App icon (optional)
+└── ... other assets
+```
+
+## Full Manifest Example
+
+```json
+{
+  "manifest_version": 1,
+  "app": {
+    "id": "com.yourcompany.myapp",
+    "name": "My App",
+    "version": "1.0.0"
+  },
+  "entry_point": "index.js",
+  "permissions": [
+    "user:profile:read",
+    "wallet:read",
+    "wallet:transfer",
+    "notifications:send",
+    "contacts:search"
+  ],
+  "navigation": [
+    {
+      "label": "My App",
+      "icon": "icon.svg",
+      "route": "/plugin/my-app"
+    }
+  ],
+  "supabase": {
+    "required": true
+  },
+  "min_peeap_version": "1.0.0"
+}
+```
+
+## Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `manifest_version` | number | Yes | Always `1` |
+| `app.id` | string | Yes | Unique identifier in reverse-domain notation |
+| `app.name` | string | Yes | Display name shown in App Store |
+| `app.version` | string | Yes | Semver version (e.g., `1.0.0`) |
+| `entry_point` | string | Yes | Main JS file — must be an ESM module with a default export |
+| `permissions` | string[] | Yes | SDK permissions your app needs |
+| `navigation` | object[] | No | Sidebar navigation entries |
+| `supabase.required` | boolean | No | Whether your app needs its own Supabase backend |
+| `min_peeap_version` | string | No | Minimum platform version required |
+
+## Entry Point
+
+Your `entry_point` file must export a default React component that receives `{ sdk }`:
+
+```javascript
+// index.js
+export default function MyApp({ sdk }) {
+  // sdk.auth, sdk.wallet, sdk.chat, etc.
+  return <div>My App</div>;
+}
+```
+
+<Warning>
+  Your bundle must be an ES Module (ESM). Use `export default` — not `module.exports`.
+</Warning>
+
+## Available Permissions
+
+### User & Auth
+| Permission | Description |
+|-----------|-------------|
+| `user:profile:read` | Read the current user's profile (name, email, phone, KYC status) |
+
+### Wallet & Payments
+| Permission | Description |
+|-----------|-------------|
+| `wallet:read` | Read wallet balances and list all wallets |
+| `wallet:balance` | Read wallet balance only (subset of wallet:read) |
+| `wallet:transfer` | Request payments and send money |
+| `wallet:transactions` | Read transaction history |
+
+### Notifications
+| Permission | Description |
+|-----------|-------------|
+| `notifications:send` | Create real platform notifications for any user |
+| `notifications:read` | Read user notifications, unread count, mark as read |
+
+### Chat & Messaging
+| Permission | Description |
+|-----------|-------------|
+| `chat:send` | Send messages to other users |
+| `chat:read` | Read conversations and message history |
+
+### Contacts
+| Permission | Description |
+|-----------|-------------|
+| `contacts:search` | Search platform users by name, email, or phone |
+| `contacts:read` | Lookup specific users by ID, phone, or email |
+
+### Platform Database (Admin-activated)
+| Permission | Description |
+|-----------|-------------|
+| `platform:query` | Query allowed platform tables (users, wallets, transactions, etc.) |
+| `platform:users:read` | Direct read access to the users table |
+
+### Storage
+| Permission | Description |
+|-----------|-------------|
+| `storage:read` | Read from the plugin's own Supabase storage |
+| `storage:write` | Write to the plugin's own Supabase storage |
+
+<Info>
+  **Admin-activated permissions** like `platform:query` and `platform:users:read` are only granted to apps that have been explicitly approved by a Peeap admin. These give your app direct read access to platform data.
+</Info>

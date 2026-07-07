@@ -1,0 +1,159 @@
+---
+title: Authentication
+description: "Secure your API requests with JWT authentication"
+---
+
+# Authentication
+
+Payment System uses JWT (JSON Web Tokens) for API authentication. After logging in, you'll receive access and refresh tokens to authenticate your requests.
+
+## Token Types
+
+| Token Type | Lifetime | Purpose |
+|------------|----------|---------|
+| Access Token | 15 minutes | Used to authenticate API requests |
+| Refresh Token | 7 days | Used to obtain new access tokens |
+
+## Getting Tokens
+
+### Registration
+
+New users receive tokens upon successful registration:
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "SecurePass123!",
+    "firstName": "John",
+    "lastName": "Doe"
+  }'
+```
+
+### Login
+
+Existing users can login to get new tokens:
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "SecurePass123!"
+  }'
+```
+
+### Response
+
+Both endpoints return the same token structure:
+
+```json
+{
+  "tokens": {
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "expiresIn": 900,
+    "tokenType": "Bearer"
+  }
+}
+```
+
+## Using the Access Token
+
+Include the access token in the `Authorization` header for all authenticated requests:
+
+```bash
+curl https://api.paymentsystem.com/v1/users/me \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+<Warning>
+  Never expose your tokens in client-side code, URLs, or logs. Always use HTTPS for API requests.
+</Warning>
+
+## Refreshing Tokens
+
+When your access token expires, use the refresh token to get a new one without requiring the user to login again:
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{
+    "refreshToken": "YOUR_REFRESH_TOKEN"
+  }'
+```
+
+**Response:**
+
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expiresIn": 900,
+  "tokenType": "Bearer"
+}
+```
+
+## Logout
+
+To invalidate your current session:
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/auth/logout \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "logoutAll": false
+  }'
+```
+
+Set `logoutAll: true` to invalidate all sessions for the user.
+
+## Password Requirements
+
+Passwords must meet the following requirements:
+
+- Minimum 8 characters
+- At least one uppercase letter
+- At least one lowercase letter
+- At least one number
+- At least one special character (@$!%*?&)
+
+## Multi-Factor Authentication (MFA)
+
+For enhanced security, users can enable MFA:
+
+1. Enable MFA in account settings
+2. Scan QR code with authenticator app
+3. Provide 6-digit code during login
+
+When MFA is enabled, login returns a special response requiring the MFA code:
+
+```json
+{
+  "tokens": {
+    "tokenType": "mfa_required"
+  }
+}
+```
+
+Submit the MFA code to complete authentication:
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "SecurePass123!",
+    "mfaCode": "123456"
+  }'
+```
+
+## Error Codes
+
+| Code | Description |
+|------|-------------|
+| 401 | Invalid credentials or expired token |
+| 403 | Account locked or suspended |
+| 429 | Too many login attempts |

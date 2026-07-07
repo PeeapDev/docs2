@@ -1,0 +1,315 @@
+---
+title: Webhook Events
+description: "Complete list of webhook event types"
+---
+
+# Webhook Events
+
+Complete reference for all webhook event types.
+
+## Transaction Events
+
+### transaction.authorized
+
+Sent when a transaction is authorized (funds held).
+
+```json
+{
+  "id": "evt_abc123",
+  "type": "transaction.authorized",
+  "createdAt": "2024-01-15T10:30:00Z",
+  "data": {
+    "id": "txn_xyz789",
+    "type": "AUTHORIZATION",
+    "status": "AUTHORIZED",
+    "amount": 99.99,
+    "currency": "USD",
+    "cardId": "crd_def456",
+    "walletId": "wal_ghi789",
+    "merchant": {
+      "name": "Example Store",
+      "category": "5411",
+      "city": "New York",
+      "country": "US"
+    },
+    "authorizationCode": "AUTH123"
+  }
+}
+```
+
+### transaction.completed
+
+Sent when a transaction is captured/completed.
+
+```json
+{
+  "id": "evt_abc124",
+  "type": "transaction.completed",
+  "createdAt": "2024-01-15T10:30:00Z",
+  "data": {
+    "id": "txn_xyz789",
+    "type": "CAPTURE",
+    "status": "CAPTURED",
+    "amount": 99.99,
+    "currency": "USD",
+    "cardId": "crd_def456",
+    "walletId": "wal_ghi789",
+    "merchant": {
+      "name": "Example Store",
+      "category": "5411"
+    }
+  }
+}
+```
+
+### transaction.declined
+
+Sent when a transaction is declined.
+
+```json
+{
+  "id": "evt_abc125",
+  "type": "transaction.declined",
+  "createdAt": "2024-01-15T10:30:00Z",
+  "data": {
+    "id": "txn_xyz790",
+    "type": "PURCHASE",
+    "status": "DECLINED",
+    "amount": 500.00,
+    "currency": "USD",
+    "cardId": "crd_def456",
+    "declineReason": "INSUFFICIENT_FUNDS",
+    "responseCode": "51"
+  }
+}
+```
+
+### transaction.refunded
+
+Sent when a transaction is refunded.
+
+```json
+{
+  "id": "evt_abc126",
+  "type": "transaction.refunded",
+  "createdAt": "2024-01-15T10:30:00Z",
+  "data": {
+    "id": "txn_refund_abc",
+    "originalTransactionId": "txn_xyz789",
+    "type": "REFUND",
+    "status": "COMPLETED",
+    "amount": 25.00,
+    "currency": "USD",
+    "reason": "Partial return"
+  }
+}
+```
+
+## Card Events
+
+### card.created
+
+Sent when a new card is issued.
+
+```json
+{
+  "id": "evt_card001",
+  "type": "card.created",
+  "createdAt": "2024-01-15T10:30:00Z",
+  "data": {
+    "id": "crd_new123",
+    "type": "VIRTUAL",
+    "status": "PENDING_ACTIVATION",
+    "lastFour": "4242",
+    "walletId": "wal_abc123",
+    "userId": "usr_def456"
+  }
+}
+```
+
+### card.activated
+
+Sent when a card is activated.
+
+```json
+{
+  "id": "evt_card002",
+  "type": "card.activated",
+  "createdAt": "2024-01-15T10:30:00Z",
+  "data": {
+    "id": "crd_new123",
+    "status": "ACTIVE",
+    "activatedAt": "2024-01-15T10:30:00Z"
+  }
+}
+```
+
+### card.blocked
+
+Sent when a card is blocked.
+
+```json
+{
+  "id": "evt_card003",
+  "type": "card.blocked",
+  "createdAt": "2024-01-15T10:30:00Z",
+  "data": {
+    "id": "crd_abc123",
+    "status": "BLOCKED",
+    "blockReason": "LOST",
+    "blockedAt": "2024-01-15T10:30:00Z"
+  }
+}
+```
+
+### card.cancelled
+
+Sent when a card is permanently cancelled.
+
+```json
+{
+  "id": "evt_card004",
+  "type": "card.cancelled",
+  "createdAt": "2024-01-15T10:30:00Z",
+  "data": {
+    "id": "crd_abc123",
+    "status": "CANCELLED",
+    "cancelledAt": "2024-01-15T10:30:00Z"
+  }
+}
+```
+
+## Wallet Events
+
+### wallet.created
+
+Sent when a new wallet is created.
+
+```json
+{
+  "id": "evt_wal001",
+  "type": "wallet.created",
+  "createdAt": "2024-01-15T10:30:00Z",
+  "data": {
+    "id": "wal_new123",
+    "currencyCode": "USD",
+    "status": "ACTIVE",
+    "ownerId": "usr_abc123",
+    "ownerType": "USER"
+  }
+}
+```
+
+### wallet.frozen
+
+Sent when a wallet is frozen.
+
+```json
+{
+  "id": "evt_wal002",
+  "type": "wallet.frozen",
+  "createdAt": "2024-01-15T10:30:00Z",
+  "data": {
+    "id": "wal_abc123",
+    "status": "FROZEN",
+    "frozenAt": "2024-01-15T10:30:00Z",
+    "reason": "Suspicious activity detected"
+  }
+}
+```
+
+### wallet.low_balance
+
+Sent when wallet balance falls below threshold.
+
+```json
+{
+  "id": "evt_wal003",
+  "type": "wallet.low_balance",
+  "createdAt": "2024-01-15T10:30:00Z",
+  "data": {
+    "id": "wal_abc123",
+    "currencyCode": "USD",
+    "availableBalance": 25.00,
+    "threshold": 50.00
+  }
+}
+```
+
+## KYC Events
+
+### kyc.submitted
+
+Sent when KYC documents are submitted.
+
+```json
+{
+  "id": "evt_kyc001",
+  "type": "kyc.submitted",
+  "createdAt": "2024-01-15T10:30:00Z",
+  "data": {
+    "userId": "usr_abc123",
+    "status": "PENDING",
+    "submittedAt": "2024-01-15T10:30:00Z",
+    "requestedTier": 2
+  }
+}
+```
+
+### kyc.approved
+
+Sent when KYC verification is approved.
+
+```json
+{
+  "id": "evt_kyc002",
+  "type": "kyc.approved",
+  "createdAt": "2024-01-15T10:30:00Z",
+  "data": {
+    "userId": "usr_abc123",
+    "status": "APPROVED",
+    "approvedAt": "2024-01-15T10:30:00Z",
+    "previousTier": 1,
+    "newTier": 2
+  }
+}
+```
+
+### kyc.rejected
+
+Sent when KYC verification is rejected.
+
+```json
+{
+  "id": "evt_kyc003",
+  "type": "kyc.rejected",
+  "createdAt": "2024-01-15T10:30:00Z",
+  "data": {
+    "userId": "usr_abc123",
+    "status": "REJECTED",
+    "rejectedAt": "2024-01-15T10:30:00Z",
+    "reasons": ["DOC_UNREADABLE", "ADDRESS_INVALID"]
+  }
+}
+```
+
+## Subscribing to Events
+
+When registering a webhook, specify which events to receive:
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/webhooks \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://your-server.com/webhooks",
+    "events": [
+      "transaction.completed",
+      "transaction.declined",
+      "card.blocked",
+      "wallet.low_balance"
+    ]
+  }'
+```
+
+Use `"events": ["*"]` to subscribe to all events.

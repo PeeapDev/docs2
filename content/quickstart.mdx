@@ -1,0 +1,190 @@
+---
+title: Quickstart
+description: "Get up and running with Payment System in minutes"
+---
+
+# Quickstart Guide
+
+This guide will help you make your first API request to Payment System.
+
+## Prerequisites
+
+- An API key (obtained from your dashboard)
+- A tool to make HTTP requests (curl, Postman, or any HTTP client)
+
+## Step 1: Register a User
+
+First, create a user account:
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.paymentsystem.com/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "SecurePass123!",
+    "firstName": "John",
+    "lastName": "Doe"
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.paymentsystem.com/v1/auth/register', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    email: 'user@example.com',
+    password: 'SecurePass123!',
+    firstName: 'John',
+    lastName: 'Doe',
+  }),
+});
+
+const data = await response.json();
+console.log(data);
+```
+
+</CodeGroup>
+
+**Response:**
+
+```json
+{
+  "user": {
+    "id": "usr_abc123",
+    "email": "user@example.com",
+    "firstName": "John",
+    "lastName": "Doe",
+    "kycStatus": "NOT_STARTED"
+  },
+  "tokens": {
+    "accessToken": "eyJhbGciOiJIUzI1NiIs...",
+    "refreshToken": "eyJhbGciOiJIUzI1NiIs...",
+    "expiresIn": 900,
+    "tokenType": "Bearer"
+  }
+}
+```
+
+## Step 2: Login
+
+If you already have an account, login to get tokens:
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.paymentsystem.com/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "SecurePass123!"
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.paymentsystem.com/v1/auth/login', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    email: 'user@example.com',
+    password: 'SecurePass123!',
+  }),
+});
+
+const { tokens } = await response.json();
+const accessToken = tokens.accessToken;
+```
+
+</CodeGroup>
+
+## Step 3: Create a Wallet
+
+Using your access token, create a wallet:
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.paymentsystem.com/v1/wallets \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -d '{
+    "currencyCode": "USD",
+    "label": "My Primary Wallet"
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.paymentsystem.com/v1/wallets', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${accessToken}`,
+  },
+  body: JSON.stringify({
+    currencyCode: 'USD',
+    label: 'My Primary Wallet',
+  }),
+});
+
+const wallet = await response.json();
+```
+
+</CodeGroup>
+
+## Step 4: Issue a Virtual Card
+
+Issue a virtual card linked to your wallet:
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.paymentsystem.com/v1/cards \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -d '{
+    "walletId": "wal_abc123",
+    "type": "VIRTUAL",
+    "label": "Online Shopping Card"
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.paymentsystem.com/v1/cards', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${accessToken}`,
+  },
+  body: JSON.stringify({
+    walletId: wallet.id,
+    type: 'VIRTUAL',
+    label: 'Online Shopping Card',
+  }),
+});
+
+const card = await response.json();
+```
+
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/authentication">
+    Learn about JWT authentication and token refresh
+  </Card>
+  <Card title="Wallets" icon="wallet" href="/concepts/wallets">
+    Deep dive into wallet management
+  </Card>
+  <Card title="Cards" icon="credit-card" href="/concepts/cards">
+    Explore card features and limits
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/introduction">
+    Complete API documentation
+  </Card>
+</CardGroup>

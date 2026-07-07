@@ -1,0 +1,141 @@
+---
+title: Webhooks Overview
+description: "Real-time event notifications"
+---
+
+# Webhooks Overview
+
+Webhooks allow you to receive real-time notifications when events occur in your Payment System account.
+
+## How Webhooks Work
+
+1. You configure a webhook endpoint URL in your dashboard
+2. When an event occurs (e.g., transaction completed), we send an HTTP POST to your endpoint
+3. Your server processes the event and responds with a 2xx status code
+4. If delivery fails, we retry with exponential backoff
+
+## Setting Up Webhooks
+
+### 1. Create an Endpoint
+
+Configure a publicly accessible HTTPS endpoint that can receive POST requests.
+
+### 2. Register the Webhook
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/webhooks \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://your-server.com/webhooks",
+    "events": ["transaction.completed", "card.blocked"],
+    "secret": "your-webhook-secret"
+  }'
+```
+
+### 3. Verify Signatures
+
+Always verify webhook signatures to ensure authenticity. See [Webhook Signatures](/webhooks/signatures).
+
+## Webhook Payload
+
+All webhooks have a consistent structure:
+
+```json
+{
+  "id": "evt_abc123",
+  "type": "transaction.completed",
+  "createdAt": "2024-01-15T10:30:00Z",
+  "data": {
+    "id": "txn_xyz789",
+    "type": "PURCHASE",
+    "amount": 99.99,
+    "currency": "USD",
+    "status": "CAPTURED"
+  }
+}
+```
+
+## Event Types
+
+| Category | Events |
+|----------|--------|
+| **Transactions** | `transaction.authorized`, `transaction.completed`, `transaction.declined`, `transaction.refunded` |
+| **Cards** | `card.created`, `card.activated`, `card.blocked`, `card.cancelled` |
+| **Wallets** | `wallet.created`, `wallet.frozen`, `wallet.low_balance` |
+| **KYC** | `kyc.submitted`, `kyc.approved`, `kyc.rejected` |
+
+See [Webhook Events](/webhooks/events) for complete event details.
+
+## Retry Policy
+
+If your endpoint doesn't return a 2xx status code, we retry:
+
+| Attempt | Delay |
+|---------|-------|
+| 1st retry | 1 minute |
+| 2nd retry | 5 minutes |
+| 3rd retry | 30 minutes |
+| 4th retry | 2 hours |
+| 5th retry | 24 hours |
+
+After 5 failed attempts, the webhook is marked as failed.
+
+## Best Practices
+
+<Warning>
+  Always verify webhook signatures before processing events.
+</Warning>
+
+1. **Return quickly**: Respond with 200 immediately, process asynchronously
+2. **Handle duplicates**: Use the event `id` for idempotency
+3. **Verify signatures**: Always validate the webhook signature
+4. **Use HTTPS**: Only use secure endpoints
+5. **Log everything**: Keep logs for debugging
+
+## Testing Webhooks
+
+### Test Endpoint
+
+Send a test event to verify your endpoint:
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/webhooks/wh_abc123/test \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### Local Development
+
+Use tools like [ngrok](https://ngrok.com) to expose your local server:
+
+```bash
+ngrok http 3000
+# Use the HTTPS URL as your webhook endpoint
+```
+
+## Managing Webhooks
+
+### List Webhooks
+
+```bash
+curl https://api.paymentsystem.com/v1/webhooks \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### Update Webhook
+
+```bash
+curl -X PATCH https://api.paymentsystem.com/v1/webhooks/wh_abc123 \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "events": ["transaction.completed", "transaction.declined"]
+  }'
+```
+
+### Delete Webhook
+
+```bash
+curl -X DELETE https://api.paymentsystem.com/v1/webhooks/wh_abc123 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```

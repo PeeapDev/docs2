@@ -1,0 +1,93 @@
+---
+title: List Wallets
+api: GET /wallets
+description: "Get all wallets for the authenticated user"
+---
+
+# List Wallets
+
+Retrieve all wallets belonging to the authenticated user.
+
+## Endpoint
+
+```
+GET /wallets
+```
+
+## Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes | Bearer access token |
+
+## Query Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `page` | integer | No | Page number (default: 1) |
+| `limit` | integer | No | Items per page (default: 20, max: 100) |
+| `currency` | string | No | Filter by currency code |
+| `status` | string | No | Filter by status (ACTIVE, FROZEN, CLOSED) |
+
+## Example Request
+
+```bash
+curl https://api.paymentsystem.com/v1/wallets \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### With Filters
+
+```bash
+curl "https://api.paymentsystem.com/v1/wallets?currency=USD&status=ACTIVE" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+## Response
+
+### Success (200 OK)
+
+```json
+{
+  "data": [
+    {
+      "id": "wal_abc123",
+      "externalId": "wal_1234567890",
+      "ownerId": "usr_xyz789",
+      "ownerType": "USER",
+      "currencyCode": "USD",
+      "availableBalance": 1000.00,
+      "heldBalance": 50.00,
+      "status": "ACTIVE",
+      "dailyLimit": 5000.00,
+      "monthlyLimit": 50000.00,
+      "createdAt": "2024-01-15T10:30:00Z"
+    },
+    {
+      "id": "wal_def456",
+      "externalId": "wal_0987654321",
+      "ownerId": "usr_xyz789",
+      "ownerType": "USER",
+      "currencyCode": "EUR",
+      "availableBalance": 500.00,
+      "heldBalance": 0,
+      "status": "ACTIVE",
+      "dailyLimit": 5000.00,
+      "monthlyLimit": 50000.00,
+      "createdAt": "2024-01-20T14:00:00Z"
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "limit": 20,
+    "total": 2,
+    "totalPages": 1
+  }
+}
+```
+
+### Errors
+
+| Status | Code | Description |
+|--------|------|-------------|
+| 401 | `UNAUTHORIZED` | Invalid or missing access token |

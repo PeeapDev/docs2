@@ -1,0 +1,85 @@
+---
+title: "Phone Verification API"
+description: "Verify a phone number by USSD dial — no SMS — and confirm whose number it is."
+---
+
+Peeap Verify confirms a phone number is **real and in the holder's hand** using a
+**USSD dial**, not an SMS. You submit a number, we return a dial code (e.g.
+`*715*12345#`); the person dials it from that number, which proves possession.
+Once verified, we return the mobile-money account holder's name, **masked**
+(e.g. `mohamed*****ia`) — so you can confirm identity without ever seeing full
+personal data. The name is only revealed **after** the dial, so it can't be
+harvested by typing a number.
+
+<Info>No SMS is sent — this works even where SMS delivery is unreliable.</Info>
+
+## Try it live
+
+Enter a number, dial the code it shows from that phone, and watch the verified
+name appear.
+
+<iframe
+  src="https://my.peeap.com/verify-demo"
+  width="100%"
+  height="660"
+  style={{ border: "1px solid #e5e7eb", borderRadius: "12px" }}
+/>
+
+## How it works
+
+<Steps>
+  <Step title="Create a verification">
+    Submit the phone number. We return a `dialCode` and a `sessionId`.
+  </Step>
+  <Step title="The user dials the code">
+    They dial `*715*…#` from that number. Dialing proves they hold the SIM.
+  </Step>
+  <Step title="Poll the status">
+    Once verified, you get back the masked account-holder name.
+  </Step>
+</Steps>
+
+## API
+
+### Create a verification
+
+```bash
+curl -X POST https://api.peeap.com/verify/create \
+  -H "Content-Type: application/json" \
+  -d '{ "phone": "077601707" }'
+```
+
+```json Response
+{
+  "sessionId": "puo-k6Se...",
+  "dialCode": "*715*025748#",
+  "status": "pending",
+  "expireTime": "2026-07-07T11:45:43Z"
+}
+```
+
+The user dials `dialCode` from the number being verified. The session lasts 5 minutes.
+
+### Poll the status
+
+```bash
+curl "https://api.peeap.com/verify/status?id=SESSION_ID"
+```
+
+```json Pending
+{ "status": "pending", "verified": false }
+```
+
+```json Verified
+{
+  "status": "verified",
+  "verified": true,
+  "name_masked": "mohamed*****ia",
+  "provider": "Orange Money"
+}
+```
+
+<Note>
+  These endpoints are open for testing today. Per-customer **API keys** and
+  **per-verification billing** are coming for production use.
+</Note>

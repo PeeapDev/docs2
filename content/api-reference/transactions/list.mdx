@@ -1,0 +1,117 @@
+---
+title: List Transactions
+api: GET /transactions
+description: "Get transaction history"
+---
+
+# List Transactions
+
+Retrieve transaction history for the authenticated user.
+
+## Endpoint
+
+```
+GET /transactions
+```
+
+## Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes | Bearer access token |
+
+## Query Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `page` | integer | No | Page number (default: 1) |
+| `limit` | integer | No | Items per page (default: 20, max: 100) |
+| `walletId` | string | No | Filter by wallet ID |
+| `cardId` | string | No | Filter by card ID |
+| `type` | string | No | Filter by transaction type |
+| `status` | string | No | Filter by status |
+| `startDate` | string | No | Filter from date (ISO 8601) |
+| `endDate` | string | No | Filter to date (ISO 8601) |
+
+## Example Request
+
+```bash
+curl https://api.paymentsystem.com/v1/transactions \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### With Filters
+
+```bash
+curl "https://api.paymentsystem.com/v1/transactions?walletId=wal_abc123&type=PURCHASE&startDate=2024-01-01" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+## Response
+
+### Success (200 OK)
+
+```json
+{
+  "data": [
+    {
+      "id": "txn_abc123",
+      "externalId": "txn_1234567890",
+      "type": "PURCHASE",
+      "status": "CAPTURED",
+      "amount": 99.99,
+      "currency": "USD",
+      "cardId": "crd_xyz789",
+      "walletId": "wal_def456",
+      "merchant": {
+        "id": "mch_123",
+        "name": "Example Store",
+        "category": "5411",
+        "city": "New York",
+        "country": "US"
+      },
+      "authorizationCode": "AUTH123",
+      "responseCode": "00",
+      "createdAt": "2024-01-15T10:30:00Z",
+      "settledAt": "2024-01-16T02:00:00Z"
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "limit": 20,
+    "total": 150,
+    "totalPages": 8
+  }
+}
+```
+
+### Errors
+
+| Status | Code | Description |
+|--------|------|-------------|
+| 401 | `UNAUTHORIZED` | Invalid or missing access token |
+
+## Transaction Types
+
+| Type | Description |
+|------|-------------|
+| `AUTHORIZATION` | Hold placed on funds |
+| `CAPTURE` | Completion of authorization |
+| `PURCHASE` | Direct debit |
+| `REFUND` | Return of funds |
+| `REVERSAL` | Authorization cancellation |
+| `P2P_TRANSFER` | Wallet-to-wallet transfer |
+| `TOPUP` | Funds added |
+| `WITHDRAWAL` | Funds removed |
+
+## Transaction Statuses
+
+| Status | Description |
+|--------|-------------|
+| `PENDING` | Awaiting processing |
+| `AUTHORIZED` | Funds held |
+| `CAPTURED` | Transaction completed |
+| `SETTLED` | Funds settled |
+| `DECLINED` | Transaction rejected |
+| `REVERSED` | Authorization reversed |
+| `REFUNDED` | Funds returned |

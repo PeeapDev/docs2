@@ -1,0 +1,87 @@
+---
+title: 'School API Overview'
+description: 'Integrate Peeap payments into your school management system'
+---
+
+# School Integration API
+
+The School API allows educational institutions to integrate Peeap's payment system into their existing school management software. Students, staff, and vendors operate within a closed ecosystem where payments are tracked and managed centrally.
+
+<Note>
+**QR Code Architecture**: Schools use their **existing student QR codes** (format: `student-{id}`). Unlike Peeap's universal QR codes that work with any merchant, school student QR codes are tied to a specific `school_id`. This SaaS-aware design ensures students can only transact within their school's ecosystem and prevents cross-school transactions.
+</Note>
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         YOUR SCHOOL SYSTEM                                   │
+│                                                                              │
+│   Students Portal  │  Staff Portal  │  Admin Dashboard  │  Mobile App       │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      │ API Calls
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           PEEAP API                                          │
+│                                                                              │
+│   /api/schools/*   │   /api/payments/*   │   /api/wallets/*                 │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Student Wallets" icon="wallet">
+    Link students to Peeap wallets for cashless payments
+  </Card>
+  <Card title="QR Payments" icon="qrcode">
+    Use existing student ID cards for payments via QR code
+  </Card>
+  <Card title="Vendor Management" icon="store">
+    Control which merchants can sell to your students
+  </Card>
+  <Card title="Fee Collection" icon="receipt">
+    Collect tuition and fees directly to school wallet
+  </Card>
+  <Card title="Salary Payments" icon="money-bill">
+    Pay staff salaries in bulk from school wallet
+  </Card>
+  <Card title="Product Control" icon="shield-check">
+    Block inappropriate products from your school shop
+  </Card>
+</CardGroup>
+
+## Authentication
+
+All School API requests require authentication using your school's API credentials:
+
+```bash
+curl -X GET "https://api.peeap.com/v1/schools/{schoolId}/students" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "X-School-ID: YOUR_SCHOOL_ID"
+```
+
+## Base URL
+
+```
+https://api.peeap.com/v1
+```
+
+## Rate Limits
+
+| Plan | Requests/minute | Requests/day |
+|------|-----------------|--------------|
+| Basic | 60 | 10,000 |
+| Pro | 300 | 50,000 |
+| Enterprise | Unlimited | Unlimited |
+
+## Quick Start
+
+1. **Register your school** on school.peeap.com
+2. **Get API credentials** from Settings → Developer
+3. **Sync students** using the Students API
+4. **Configure vendors** using the Vendors API
+5. **Enable payments** in your school portal

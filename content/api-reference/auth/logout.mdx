@@ -1,0 +1,96 @@
+---
+title: Logout
+api: POST /auth/logout
+description: "Invalidate current session"
+---
+
+# Logout
+
+Invalidate the current session or all user sessions.
+
+## Endpoint
+
+```
+POST /auth/logout
+```
+
+## Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes | Bearer access token |
+
+## Request Body
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `logoutAll` | boolean | No | If true, invalidate all sessions (default: false) |
+
+## Example Request
+
+### Logout Current Session
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/auth/logout \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "logoutAll": false
+  }'
+```
+
+### Logout All Sessions
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/auth/logout \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "logoutAll": true
+  }'
+```
+
+## Response
+
+### Success (200 OK)
+
+```json
+{
+  "message": "Logged out successfully",
+  "sessionsInvalidated": 1
+}
+```
+
+When `logoutAll: true`:
+
+```json
+{
+  "message": "All sessions logged out successfully",
+  "sessionsInvalidated": 5
+}
+```
+
+### Errors
+
+| Status | Code | Description |
+|--------|------|-------------|
+| 401 | `UNAUTHORIZED` | Invalid or missing access token |
+
+## Use Cases
+
+### Single Device Logout
+Use `logoutAll: false` when the user logs out from a single device.
+
+### Security Incident
+Use `logoutAll: true` when:
+- User suspects unauthorized access
+- Password was changed
+- MFA was enabled/disabled
+- User requests to secure their account
+
+## Notes
+
+- After logout, the access token becomes invalid immediately
+- The associated refresh token is also invalidated
+- For `logoutAll`, all refresh tokens for the user are invalidated
+- Users will need to login again on affected devices

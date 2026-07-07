@@ -1,0 +1,185 @@
+---
+title: "Recipe · E-commerce checkout"
+description: "A complete online-store integration: charge for an order and fulfil it safely."
+---
+
+# Recipe · E-commerce checkout
+
+This is the canonical Peeap Pay integration: a customer has a cart, you charge
+them, and you ship once the money is confirmed. It's Parts 2–3 assembled into one
+working project. If you adapt only one recipe, adapt this one.
+
+## The shape
+
+```
+Customer clicks "Pay"
+      │
+      ▼
+[1] Your server  ──POST /api/checkout/create──▶  Peeap   (returns paymentUrl + sessionId)
+      │  save {sessionId, orderId, amount} as OPEN
+      ▼
+[2] Browser  ──redirect──▶  checkout.peeap.com  (customer pays)
+      │
+      ▼
+[3] Browser returns to your /return page  ──poll your backend──▶  status?
+      │
+[4] Your server  ──GET /api/checkout/sessions/{id}──▶  Peeap  (COMPLETE?)
+      │  on COMPLETE + amount match: fulfil ONCE, mark PAID
+      ▼
+[5] Reconciler (cron)  re-checks any still-OPEN sessions  (safety net)
+```
+
+## 1. Create the session (server)
+
+When the customer hits "Pay", your **server** creates the session and stores it.
+
+```javascript
+// POST /api/orders/:id/pay  (your own endpoint)
+import { randomUUID } from "crypto";
+
+app.post("/api/orders/:id/pay", async (req, res) => {
+  const order = await db.orders.get(req.params.id);
+
+  const r = await fetch("https://api.peeap.com/api/checkout/create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      publicKey: process.env.PEEAP_PUBLIC_KEY,   // pk_test_… in dev
+      amount: order.total,                        // number, in SLE
+      currency: "SLE",
+      description: `Order #${order.id}`,
+      reference: order.id,                        // your id comes back later
+      idempotencyKey: `order_${order.id}`,        // dedupes double-clicks
+      redirectUrl: `https://yourstore.com/return?order=${order.id}`,
+      customerEmail: order.email,
+      customerPhone: order.phone,
+      metadata: { orderId: order.id, cartId: order.cartId },
+    }),
+  });
+
+  const session = await r.json();
+  if (!r.ok) return res.status(502).json({ error: session.error });
+
+  // Persist BEFORE redirecting — this is your ledger row (Chapter 7/10)
+  await db.peeapPayments.insert({
+    sessionId: session.sessionId,
+    reference: order.id,
+    expectedAmount: order.total,
+    status: "OPEN",
+    createdAt: new Date(),
+  });
+
+  res.json({ paymentUrl: session.paymentUrl });
+});
+```
+
+<Warning>
+Notice the amount comes from `order.total` **on the server**, never from the
+request body. A browser must not be able to tell your server what to charge.
+</Warning>
+
+## 2. Send the customer to pay (browser)
+
+```javascript
+// in your storefront, after clicking "Pay"
+const r = await fetch(`/api/orders/${orderId}/pay`, { method: "POST" });
+const { paymentUrl } = await r.json();
+window.location.href = paymentUrl; // → checkout.peeap.com
+```
+
+The customer pays with mobile money, a Peeap card, or QR — all rendered by Peeap.
+
+## 3. The return page (browser)
+
+The customer comes back to `/return?order=…&status=…`. **Treat this as UX only** —
+show a confirming state and poll *your own* backend, which checks Peeap:
+
+```javascript
+// /return page
+async function confirm(orderId) {
+  for (let i = 0; i < 10; i++) {
+    const r = await fetch(`/api/orders/${orderId}/status`);
+    const { status } = await r.json();
+    if (status === "PAID") return show("✅ Payment confirmed!");
+    if (status === "EXPIRED") return show("Payment didn't complete. Try again.");
+    await new Promise((res) => setTimeout(res, 3000));
+  }
+  show("Still confirming — we'll email your receipt shortly."); // reconciler will finish
+}
+```
+
+## 4. Confirm + fulfil (server, idempotent)
+
+```javascript
+// GET /api/orders/:id/status  — your endpoint the return page polls
+app.get("/api/orders/:id/status", async (req, res) => {
+  const row = await db.peeapPayments.byReference(req.params.id);
+  if (row.status !== "OPEN") return res.json({ status: row.status });
+
+  const s = await getSessionSafe(row.sessionId); // Chapter 9 — fails to UNKNOWN
+  if (s.status === "COMPLETE") {
+    await fulfilOrderOnce(row.sessionId, s, row); // atomic claim — Chapter 8
+    return res.json({ status: "PAID" });
+  }
+  if (s.status === "EXPIRED") {
+    await db.peeapPayments.setStatus(row.sessionId, "EXPIRED");
+    return res.json({ status: "EXPIRED" });
+  }
+  res.json({ status: "OPEN" });
+});
+
+async function fulfilOrderOnce(sessionId, session, row) {
+  // amount check first — never ship on a mismatch
+  if (Number(session.amount) !== Number(row.expectedAmount)) {
+    return flagForReview(sessionId);
+  }
+  const claimed = await db.peeapPayments.claim(sessionId); // OPEN -> PAID, atomic
+  if (!claimed) return;                                    // someone beat us to it
+  await shipOrder(row.reference);
+  await emailReceipt(row.reference);
+}
+```
+
+## 5. The reconciler (cron — the safety net)
+
+Even if the customer closes the tab in step 3, this catches the payment:
+
+```javascript
+// runs every few minutes
+async function reconcile() {
+  const open = await db.peeapPayments.where({ status: "OPEN" });
+  for (const row of open) {
+    const s = await getSessionSafe(row.sessionId);
+    if (s.status === "COMPLETE") await fulfilOrderOnce(row.sessionId, s, row);
+    else if (s.status === "EXPIRED") await db.peeapPayments.setStatus(row.sessionId, "EXPIRED");
+  }
+}
+```
+
+<Note>
+Steps 4 and 5 call the **same** `fulfilOrderOnce`. That's the whole trick: every
+path to "mark paid" goes through one idempotent function, so it doesn't matter
+whether the foreground poll or the reconciler gets there first.
+</Note>
+
+## Going live checklist
+
+<Steps>
+  <Step title="Swap the key">
+    `PEEAP_PUBLIC_KEY` → `pk_live_…` in your production environment (not in code).
+  </Step>
+  <Step title="Clear the trial gate">
+    Make sure your business is approved past the live trial limit
+    ([Chapter 2](/guide/test-vs-live)).
+  </Step>
+  <Step title="Real redirect URL">
+    Use a reachable HTTPS `redirectUrl` — `localhost` is rejected in live mode.
+  </Step>
+  <Step title="Reconciler is running">
+    Confirm the cron is deployed and alerting on mismatches. It's the difference
+    between "we lost a payment" and "we caught it."
+  </Step>
+</Steps>
+
+That's a complete, production-grade store integration. The other recipes are
+variations on this same spine.

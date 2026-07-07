@@ -1,0 +1,136 @@
+---
+title: "10 · Reconciliation"
+description: "Build your own ledger and prove every payment is accounted for."
+---
+
+# Chapter 10 · Reconciliation
+
+Reconciliation answers one question: **does what you think happened match what
+actually happened?** Every order you believe is paid should map to a real
+`COMPLETE` session, and every `COMPLETE` session should map to a fulfilled order.
+No orphans on either side.
+
+## You own the ledger
+
+A reminder of the constraint from [Chapter 7](/guide/confirming-payments): **Peeap
+has no endpoint that lists your payments.** You can read a session by id, but you
+can't ask "show me all my payments today." That means **your database is the
+authoritative ledger**, and reconciliation is the discipline of keeping it true.
+
+This is not a limitation to fear — it's normal for payment integrations. You
+already started the ledger in Chapter 7. Here's the full shape:
+
+```sql
+-- one row per checkout session you create
+CREATE TABLE peeap_payments (
+  session_id       text PRIMARY KEY,   -- cs_… from create
+  reference        text NOT NULL,      -- your order id
+  expected_amount  numeric NOT NULL,   -- what you asked for, in SLE
+  status           text NOT NULL,      -- OPEN | PAID | EXPIRED
+  paid_amount      numeric,            -- what Peeap reported on COMPLETE
+  created_at       timestamptz NOT NULL,
+  settled_at       timestamptz
+);
+```
+
+<Note>
+Write a row the instant `create` returns (status `OPEN`). Update it only through
+your idempotent fulfilment guard ([Chapter 8](/guide/idempotency)). This table —
+not Peeap, not your order table — is where you reconcile.
+</Note>
+
+## The three checks
+
+Run these on a schedule (e.g. nightly) and alert on anything they surface.
+
+<Steps>
+  <Step title="Settle the still-open">
+    For every row still `OPEN` and younger than its 30-minute window, read the
+    session from Peeap. `COMPLETE` → fulfil + mark `PAID`. `EXPIRED` → mark
+    `EXPIRED`. This is your reconciler from Chapter 7; reconciliation is just
+    running it deliberately and reporting the results.
+  </Step>
+  <Step title="Match amounts">
+    For every `PAID` row, assert `paid_amount === expected_amount`. A mismatch
+    means the customer paid a different amount than the order required — flag it,
+    don't auto-resolve it.
+  </Step>
+  <Step title="Find orphans">
+    Every `PAID` payment should have a fulfilled order, and every fulfilled order
+    should have a `PAID` payment. List the exceptions in both directions — those
+    are the cases worth a human's eyes.
+  </Step>
+</Steps>
+
+## A minimal reconciler
+
+```javascript
+async function reconcile() {
+  const report = { settled: 0, expired: 0, mismatches: [], stillOpen: 0 };
+
+  const open = await db.query(
+    "SELECT * FROM peeap_payments WHERE status = 'OPEN'"
+  );
+
+  for (const row of open) {
+    const s = await getSessionSafe(row.session_id); // Chapter 9 — fails to UNKNOWN
+
+    if (s.status === "COMPLETE") {
+      await fulfilOrderOnce(row.session_id, s);      // Chapter 8 — atomic claim
+      if (Number(s.amount) !== Number(row.expected_amount)) {
+        report.mismatches.push({
+          sessionId: row.session_id,
+          expected: row.expected_amount,
+          paid: s.amount,
+        });
+      }
+      report.settled++;
+    } else if (s.status === "EXPIRED") {
+      await db.query(
+        "UPDATE peeap_payments SET status='EXPIRED' WHERE session_id=$1",
+        [row.session_id]
+      );
+      report.expired++;
+    } else {
+      report.stillOpen++; // OPEN or UNKNOWN — re-check next run
+    }
+  }
+
+  if (report.mismatches.length) await alertOps(report); // money is on the line
+  return report;
+}
+```
+
+<Warning>
+**An empty mismatch list is the only "all clear."** Don't let a reconciler that
+runs successfully but quietly skips errors read as "everything's fine." Count what
+you settled, what expired, what's still open, and what didn't match — and surface
+all four. Silence is not the same as correctness.
+</Warning>
+
+## What reconciliation protects you from
+
+- **Lost payments** — a customer paid, but a crash meant your server never marked
+  the order paid. The `OPEN` row gets re-checked and settled.
+- **Wrong amounts** — partial or altered payments surface as mismatches instead of
+  silently shipping.
+- **Phantom fulfilments** — an order you shipped that has no matching `PAID`
+  payment is a red flag you want to catch early.
+
+<Tip>
+**Advanced** — Keep `settled_at` and your own `created_at` so you can compute
+settlement lag and spot a provider slowdown before customers complain. If you later
+move money between wallets, append-only ledger entries (never in-place balance
+edits) make end-of-day reconciliation a single `SUM`.
+</Tip>
+
+## You now have a production-grade integration
+
+With Chapters 7–10 in place you have create → pay → confirm-by-polling →
+idempotent-fulfil → reconcile. That is a correct, resilient Peeap Pay integration
+that doesn't lose money even when the network, the browser, or the customer
+misbehaves.
+
+One piece remains — the webhook system that *will* eventually let Peeap push
+completions to you, so you can stop leaning entirely on polling. Continue to
+[Chapter 11 → Webhooks](/guide/webhooks).

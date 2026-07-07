@@ -1,0 +1,107 @@
+---
+title: Refresh Token
+api: POST /auth/refresh
+description: "Get new tokens using refresh token"
+---
+
+# Refresh Token
+
+Exchange a valid refresh token for new access and refresh tokens.
+
+## Endpoint
+
+```
+POST /auth/refresh
+```
+
+## Request Body
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `refreshToken` | string | Yes | Valid refresh token |
+
+## Example Request
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  }'
+```
+
+## Response
+
+### Success (200 OK)
+
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expiresIn": 900,
+  "tokenType": "Bearer"
+}
+```
+
+### Errors
+
+| Status | Code | Description |
+|--------|------|-------------|
+| 401 | `INVALID_TOKEN` | Refresh token is invalid or malformed |
+| 401 | `TOKEN_EXPIRED` | Refresh token has expired |
+| 401 | `TOKEN_REVOKED` | Refresh token has been revoked |
+
+```json
+{
+  "statusCode": 401,
+  "message": "Refresh token has expired",
+  "error": "TOKEN_EXPIRED"
+}
+```
+
+## Token Rotation
+
+For security, the refresh token is rotated on each use:
+
+- Old refresh token is invalidated
+- New refresh token is returned
+- Store the new refresh token for future use
+
+<Warning>
+  If you use the same refresh token twice, it will be considered a potential token theft and all tokens for that session may be revoked.
+</Warning>
+
+## Best Practices
+
+1. **Proactive refresh**: Refresh tokens before they expire to avoid interruption
+2. **Secure storage**: Store refresh tokens securely (HttpOnly cookies, secure storage)
+3. **Handle failures**: If refresh fails, redirect user to login
+4. **Single use**: Always use the latest refresh token returned
+
+## Example Flow
+
+```javascript
+async function refreshTokens() {
+  const refreshToken = getStoredRefreshToken();
+
+  try {
+    const response = await fetch('/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken })
+    });
+
+    if (!response.ok) {
+      // Refresh failed, redirect to login
+      redirectToLogin();
+      return;
+    }
+
+    const tokens = await response.json();
+    storeTokens(tokens);
+    return tokens.accessToken;
+  } catch (error) {
+    redirectToLogin();
+  }
+}
+```

@@ -1,0 +1,147 @@
+---
+title: KYC
+description: "Know Your Customer verification and compliance"
+---
+
+# KYC (Know Your Customer)
+
+Payment System includes built-in KYC verification to comply with financial regulations and prevent fraud.
+
+## KYC Tiers
+
+| Tier | Verification | Transaction Limits | Features |
+|------|--------------|-------------------|----------|
+| **Tier 0** | Email only | $100/day | Basic wallet |
+| **Tier 1** | ID verification | $1,000/day | Virtual cards |
+| **Tier 2** | Full KYC | $10,000/day | Physical cards |
+| **Tier 3** | Enhanced due diligence | Custom limits | Business features |
+
+## KYC Statuses
+
+| Status | Description |
+|--------|-------------|
+| `NOT_STARTED` | User has not begun KYC |
+| `PENDING` | Documents submitted, awaiting review |
+| `UNDER_REVIEW` | Manual review in progress |
+| `APPROVED` | KYC verified successfully |
+| `REJECTED` | Verification failed |
+| `EXPIRED` | Verification has expired |
+
+## Verification Process
+
+### Step 1: Submit Application
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/kyc/submit \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "INDIVIDUAL",
+    "firstName": "John",
+    "lastName": "Doe",
+    "dateOfBirth": "1990-01-15",
+    "nationality": "US",
+    "idType": "PASSPORT",
+    "idNumber": "123456789",
+    "idExpiryDate": "2030-01-15",
+    "address": {
+      "street": "123 Main St",
+      "city": "New York",
+      "state": "NY",
+      "postalCode": "10001",
+      "country": "US"
+    }
+  }'
+```
+
+### Step 2: Upload Documents
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/kyc/documents \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "type=PASSPORT" \
+  -F "side=FRONT" \
+  -F "file=@passport.jpg"
+```
+
+Required documents:
+
+| Document | Description |
+|----------|-------------|
+| `PASSPORT` | Government-issued passport |
+| `DRIVERS_LICENSE` | Driver's license (front and back) |
+| `NATIONAL_ID` | National ID card |
+| `UTILITY_BILL` | Proof of address (within 3 months) |
+| `SELFIE` | Live selfie for facial verification |
+
+### Step 3: Check Status
+
+```bash
+curl https://api.paymentsystem.com/v1/kyc/status \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+**Response:**
+
+```json
+{
+  "status": "APPROVED",
+  "tier": 2,
+  "submittedAt": "2024-01-15T10:30:00Z",
+  "approvedAt": "2024-01-15T14:45:00Z",
+  "expiresAt": "2025-01-15T14:45:00Z"
+}
+```
+
+## Document Requirements
+
+### Photo ID
+- Full color, high resolution
+- All four corners visible
+- No glare or shadows
+- Not expired
+
+### Proof of Address
+- Dated within last 3 months
+- Shows full name and address
+- Official document (utility bill, bank statement)
+
+### Selfie
+- Clear, well-lit photo
+- Face fully visible
+- No sunglasses or hats
+- Matches photo ID
+
+## Rejection Reasons
+
+| Code | Reason | Resolution |
+|------|--------|------------|
+| `DOC_UNREADABLE` | Document is blurry or unclear | Upload clearer image |
+| `DOC_EXPIRED` | Document has expired | Provide valid document |
+| `NAME_MISMATCH` | Name doesn't match records | Contact support |
+| `ADDRESS_INVALID` | Cannot verify address | Provide different proof |
+| `FACE_MISMATCH` | Selfie doesn't match ID | Take new selfie |
+
+## Resubmission
+
+If rejected, users can resubmit with corrected information:
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/kyc/resubmit \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "corrections": ["DOC_UNREADABLE"],
+    "notes": "Uploaded higher quality scan"
+  }'
+```
+
+## Compliance Notes
+
+<Warning>
+  KYC data is encrypted at rest and in transit. Access is strictly logged and audited for compliance.
+</Warning>
+
+- All KYC data is retained per regulatory requirements
+- Users can request data export under GDPR
+- Annual re-verification may be required for high-risk accounts

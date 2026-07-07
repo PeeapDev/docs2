@@ -1,0 +1,815 @@
+---
+title: 'Peeap API for Schools'
+description: 'APIs your school system calls to integrate with Peeap wallets and payments'
+---
+
+# Peeap API for Schools
+
+These are the Peeap APIs your school system needs to consume for wallet management, payments, and student linking.
+
+## Base URL
+
+```
+https://api.peeap.com/v1
+```
+
+## Authentication
+
+All requests require your school's API credentials:
+
+```bash
+curl -X GET "https://api.peeap.com/v1/school/..." \
+  -H "Authorization: Bearer YOUR_PEEAP_API_KEY" \
+  -H "X-School-ID: your_school_id" \
+  -H "Content-Type: application/json"
+```
+
+---
+
+## Wallet Management
+
+### Create/Link Student Wallet
+
+Create a Peeap wallet for a student or link to existing account.
+
+```
+POST /api/school/students/link-wallet
+```
+
+#### Request Body
+
+```json
+{
+  "index_number": "SL2024/12345",
+  "admission_no": "2023/001",
+  "first_name": "Abu Bakar",
+  "last_name": "Kamara",
+  "phone": "+23276123456",
+  "parent_phone": "+23277654321",
+  "class": "SSS 1",
+  "school_student_id": 45
+}
+```
+
+#### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "peeap_id": "usr_abc123",
+    "wallet_id": "wal_xyz789",
+    "index_number": "SL2024/12345",
+    "status": "active",
+    "is_new_account": true,
+    "requires_pin_setup": true
+  }
+}
+```
+
+<Note>
+If `phone` matches an existing Peeap user, the wallet is linked. Otherwise, a new account is created with a pending PIN setup.
+</Note>
+
+---
+
+### Get Student Wallet Balance
+
+```
+GET /api/school/wallets/{index_number}/balance
+```
+
+#### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "index_number": "SL2024/12345",
+    "peeap_id": "usr_abc123",
+    "wallet_id": "wal_xyz789",
+    "balance": 150000,
+    "currency": "SLE",
+    "status": "active",
+    "daily_spent": 25000,
+    "daily_limit": 100000
+  }
+}
+```
+
+---
+
+### Set Student Spending Limits
+
+School can set daily/transaction limits for students.
+
+```
+POST /api/school/wallets/{index_number}/limits
+```
+
+#### Request Body
+
+```json
+{
+  "daily_limit": 100000,
+  "per_transaction_limit": 50000,
+  "monthly_limit": 500000,
+  "blocked_categories": ["electronics", "cosmetics"]
+}
+```
+
+#### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "limits_updated": true,
+    "effective_from": "2024-01-15T00:00:00Z"
+  }
+}
+```
+
+---
+
+## Payment Processing
+
+### Initiate Payment (Vendor Terminal)
+
+When vendor scans student QR and enters amount.
+
+```
+POST /api/school/payments/initiate
+```
+
+#### Request Body
+
+```json
+{
+  "school_id": 1,
+  "student_id": 45,
+  "index_number": "SL2024/12345",
+  "vendor_id": "vendor_001",
+  "amount": 15000,
+  "description": "Lunch - Rice & Chicken",
+  "items": [
+    { "product_id": "prod_001", "name": "Rice & Chicken", "qty": 1, "price": 15000 }
+  ]
+}
+```
+
+#### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "session_id": "pay_session_abc123",
+    "student": {
+      "name": "Abu Bakar Kamara",
+      "class": "SSS 1",
+      "photo_url": "https://cdn.peeap.com/students/45.jpg"
+    },
+    "wallet_balance": 150000,
+    "amount": 15000,
+    "sufficient_balance": true,
+    "requires_pin": true,
+    "expires_at": "2024-01-15T10:05:00Z"
+  }
+}
+```
+
+---
+
+### Authorize Payment (With PIN)
+
+Student enters PIN to confirm payment.
+
+```
+POST /api/school/payments/authorize
+```
+
+#### Request Body
+
+```json
+{
+  "session_id": "pay_session_abc123",
+  "pin": "1234"
+}
+```
+
+#### Success Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "transaction_id": "txn_peeap_abc123",
+    "status": "completed",
+    "amount": 15000,
+    "new_balance": 135000,
+    "student": {
+      "name": "Abu Bakar Kamara",
+      "index_number": "SL2024/12345"
+    },
+    "vendor": {
+      "id": "vendor_001",
+      "name": "Campus Canteen"
+    },
+    "receipt_url": "https://receipts.peeap.com/txn_peeap_abc123",
+    "timestamp": "2024-01-15T10:02:30Z"
+  }
+}
+```
+
+#### Error: Wrong PIN
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_PIN",
+    "message": "Incorrect PIN",
+    "attempts_remaining": 2
+  }
+}
+```
+
+#### Error: Insufficient Balance
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INSUFFICIENT_BALANCE",
+    "message": "Wallet balance too low",
+    "balance": 10000,
+    "required": 15000
+  }
+}
+```
+
+#### Error: Limit Exceeded
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "LIMIT_EXCEEDED",
+    "message": "Daily spending limit reached",
+    "daily_limit": 100000,
+    "daily_spent": 95000,
+    "amount_requested": 15000
+  }
+}
+```
+
+---
+
+### Process Fee Payment
+
+Parent or student pays school fee.
+
+```
+POST /api/school/fees/pay
+```
+
+#### Request Body
+
+```json
+{
+  "school_id": 1,
+  "student_id": 45,
+  "index_number": "SL2024/12345",
+  "fee_id": 101,
+  "amount": 150000,
+  "payer_type": "parent",
+  "payer_wallet_id": "wal_parent_123",
+  "pin": "5678"
+}
+```
+
+#### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "transaction_id": "txn_fee_xyz789",
+    "fee_id": 101,
+    "fee_name": "Term 1 Tuition",
+    "amount_paid": 150000,
+    "fee_status": "paid",
+    "remaining_balance": 0,
+    "paid_by": "parent",
+    "receipt_url": "https://receipts.peeap.com/txn_fee_xyz789",
+    "timestamp": "2024-01-15T10:00:00Z"
+  }
+}
+```
+
+<Note>
+For partial payments, `fee_status` will be `partial` and `remaining_balance` will show what's still owed.
+</Note>
+
+---
+
+### Refund Payment
+
+```
+POST /api/school/payments/{transaction_id}/refund
+```
+
+#### Request Body
+
+```json
+{
+  "amount": 15000,
+  "reason": "Product not available",
+  "refund_type": "full"
+}
+```
+
+#### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "refund_id": "ref_abc123",
+    "original_transaction_id": "txn_peeap_abc123",
+    "amount_refunded": 15000,
+    "student_new_balance": 150000,
+    "status": "completed"
+  }
+}
+```
+
+---
+
+## Wallet Top-up
+
+### Top-up Student Wallet (From Parent)
+
+```
+POST /api/school/wallets/{index_number}/topup
+```
+
+#### Request Body
+
+```json
+{
+  "amount": 50000,
+  "source_wallet_id": "wal_parent_123",
+  "pin": "5678",
+  "note": "Weekly allowance"
+}
+```
+
+#### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "transaction_id": "txn_topup_abc123",
+    "amount": 50000,
+    "student_new_balance": 200000,
+    "timestamp": "2024-01-15T08:00:00Z"
+  }
+}
+```
+
+---
+
+### Top-up via Mobile Money
+
+```
+POST /api/school/wallets/{index_number}/topup/mobile-money
+```
+
+#### Request Body
+
+```json
+{
+  "amount": 50000,
+  "provider": "orange_money",
+  "phone": "+23276123456"
+}
+```
+
+#### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "payment_request_id": "momo_req_123",
+    "status": "pending",
+    "message": "Approve payment on your phone",
+    "expires_at": "2024-01-15T10:10:00Z"
+  }
+}
+```
+
+---
+
+## Transaction History
+
+### Get Student Transactions
+
+```
+GET /api/school/transactions/{index_number}
+```
+
+#### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `from` | date | Start date (ISO 8601) |
+| `to` | date | End date (ISO 8601) |
+| `type` | string | `purchase`, `fee`, `topup`, `refund`, `transfer` |
+| `page` | integer | Page number |
+| `limit` | integer | Items per page (max 100) |
+
+#### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "transactions": [
+      {
+        "id": "txn_peeap_abc123",
+        "type": "purchase",
+        "amount": -15000,
+        "balance_after": 135000,
+        "description": "Lunch - Rice & Chicken",
+        "vendor": {
+          "id": "vendor_001",
+          "name": "Campus Canteen"
+        },
+        "timestamp": "2024-01-15T12:30:00Z",
+        "status": "completed"
+      },
+      {
+        "id": "txn_topup_xyz789",
+        "type": "topup",
+        "amount": 50000,
+        "balance_after": 150000,
+        "description": "Top-up from Parent",
+        "source": "parent_wallet",
+        "timestamp": "2024-01-15T08:00:00Z",
+        "status": "completed"
+      }
+    ],
+    "summary": {
+      "total_spent": 125000,
+      "total_topups": 200000,
+      "total_fees_paid": 150000
+    },
+    "pagination": {
+      "page": 1,
+      "limit": 50,
+      "total": 156
+    }
+  }
+}
+```
+
+---
+
+## Student Transfer
+
+### Notify Peeap of Transfer
+
+When school initiates transfer, notify Peeap to update wallet association.
+
+```
+POST /api/school/students/transfer
+```
+
+#### Request Body
+
+```json
+{
+  "index_number": "SL2024/12345",
+  "from_school_id": 1,
+  "to_school_id": 2,
+  "transfer_date": "2024-06-01",
+  "new_admission_no": "2024/055"
+}
+```
+
+#### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "transfer_id": "transfer_abc123",
+    "index_number": "SL2024/12345",
+    "peeap_id": "usr_abc123",
+    "wallet_id": "wal_xyz789",
+    "wallet_balance": 50000,
+    "old_school_id": 1,
+    "new_school_id": 2,
+    "status": "transferred",
+    "message": "Wallet preserved. Student can use at new school."
+  }
+}
+```
+
+---
+
+## Vendor Management
+
+### Register Vendor Terminal
+
+```
+POST /api/school/vendors/register
+```
+
+#### Request Body
+
+```json
+{
+  "school_id": 1,
+  "vendor_id": "vendor_001",
+  "terminal_id": "term_001",
+  "vendor_name": "Campus Canteen",
+  "category": "food_beverages"
+}
+```
+
+#### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "vendor_id": "vendor_001",
+    "terminal_id": "term_001",
+    "api_key": "vnd_key_xxxxxx",
+    "status": "active"
+  }
+}
+```
+
+---
+
+### Get Vendor Sales Report
+
+```
+GET /api/school/vendors/{vendor_id}/sales
+```
+
+#### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `from` | date | Start date |
+| `to` | date | End date |
+| `school_id` | integer | Filter by school |
+
+#### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "vendor_id": "vendor_001",
+    "vendor_name": "Campus Canteen",
+    "period": {
+      "from": "2024-01-01",
+      "to": "2024-01-31"
+    },
+    "summary": {
+      "total_sales": 1500000,
+      "transaction_count": 450,
+      "average_transaction": 3333,
+      "refunds": 25000
+    },
+    "daily_breakdown": [
+      { "date": "2024-01-15", "sales": 75000, "transactions": 25 }
+    ]
+  }
+}
+```
+
+---
+
+## Webhooks (Peeap → School)
+
+Register your webhook endpoint to receive real-time events.
+
+### Register Webhook
+
+```
+POST /api/school/webhooks/register
+```
+
+#### Request Body
+
+```json
+{
+  "url": "https://your-school.com/api/peeap-pay/webhook",
+  "events": [
+    "transaction.completed",
+    "fee.paid",
+    "transport.fee_paid",
+    "wallet.topup",
+    "student.transferred"
+  ],
+  "secret": "your_webhook_secret"
+}
+```
+
+#### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "webhook_id": "wh_abc123",
+    "url": "https://your-school.com/api/peeap-pay/webhook",
+    "events": ["transaction.completed", "fee.paid", "transport.fee_paid", "wallet.topup", "student.transferred"],
+    "status": "active"
+  }
+}
+```
+
+---
+
+### Webhook Payload Format
+
+All webhooks include:
+
+```json
+{
+  "event": "transaction.completed",
+  "timestamp": "2024-01-15T12:30:00Z",
+  "webhook_id": "wh_abc123",
+  "signature": "sha256=xxxxxxxx",
+  "data": { ... }
+}
+```
+
+### Verify Webhook Signature
+
+```javascript
+const crypto = require('crypto');
+
+function verifyWebhook(payload, signature, secret) {
+  const expected = 'sha256=' + crypto
+    .createHmac('sha256', secret)
+    .update(JSON.stringify(payload))
+    .digest('hex');
+  return signature === expected;
+}
+```
+
+---
+
+### Event: transaction.completed
+
+```json
+{
+  "event": "transaction.completed",
+  "data": {
+    "transaction_id": "txn_peeap_abc123",
+    "school_id": 1,
+    "student_id": 45,
+    "index_number": "SL2024/12345",
+    "amount": 15000,
+    "type": "purchase",
+    "vendor_id": "vendor_001",
+    "vendor_name": "Campus Canteen",
+    "description": "Lunch - Rice & Chicken",
+    "balance_after": 135000,
+    "timestamp": "2024-01-15T12:30:00Z"
+  }
+}
+```
+
+### Event: fee.paid
+
+```json
+{
+  "event": "fee.paid",
+  "data": {
+    "transaction_id": "txn_fee_xyz789",
+    "school_id": 1,
+    "student_id": 45,
+    "index_number": "SL2024/12345",
+    "fee_id": 101,
+    "fee_name": "Term 1 Tuition",
+    "amount": 150000,
+    "paid_by": "parent",
+    "payer_name": "Mr. Kamara",
+    "fee_status": "paid",
+    "remaining_balance": 0,
+    "timestamp": "2024-01-15T10:00:00Z"
+  }
+}
+```
+
+### Event: transport.fee_paid
+
+```json
+{
+  "event": "transport.fee_paid",
+  "data": {
+    "transaction_id": "txn_transport_abc",
+    "school_id": 1,
+    "student_id": 45,
+    "index_number": "SL2024/12345",
+    "student_name": "Abu Bakar Kamara",
+    "route_id": "route_a",
+    "route_name": "Lumley → School",
+    "amount": 5000,
+    "valid_from": "2024-01-01",
+    "valid_to": "2024-01-31",
+    "driver_id": "driver_001",
+    "driver_phone": "+23276999888",
+    "timestamp": "2024-01-15T08:00:00Z"
+  }
+}
+```
+
+### Event: wallet.topup
+
+```json
+{
+  "event": "wallet.topup",
+  "data": {
+    "transaction_id": "txn_topup_xyz",
+    "school_id": 1,
+    "student_id": 45,
+    "index_number": "SL2024/12345",
+    "amount": 50000,
+    "new_balance": 200000,
+    "source": "parent_wallet",
+    "source_name": "Mr. Kamara",
+    "timestamp": "2024-01-15T08:00:00Z"
+  }
+}
+```
+
+### Event: student.transferred
+
+```json
+{
+  "event": "student.transferred",
+  "data": {
+    "transfer_id": "transfer_abc123",
+    "index_number": "SL2024/12345",
+    "student_name": "Abu Bakar Kamara",
+    "from_school_id": 1,
+    "from_school_name": "Government Secondary School",
+    "to_school_id": 2,
+    "to_school_name": "Bo Government School",
+    "wallet_balance": 50000,
+    "transfer_date": "2024-06-01",
+    "timestamp": "2024-06-01T00:00:00Z"
+  }
+}
+```
+
+---
+
+## Error Codes
+
+| Code | Description |
+|------|-------------|
+| `INVALID_API_KEY` | API key is invalid or expired |
+| `SCHOOL_NOT_FOUND` | School ID not registered |
+| `STUDENT_NOT_FOUND` | Student not found in this school |
+| `WALLET_NOT_FOUND` | No wallet linked to student |
+| `INSUFFICIENT_BALANCE` | Wallet balance too low |
+| `INVALID_PIN` | Wrong PIN entered |
+| `PIN_LOCKED` | Too many wrong attempts, PIN locked |
+| `LIMIT_EXCEEDED` | Daily/transaction limit exceeded |
+| `BLOCKED_CATEGORY` | Product category blocked for this student |
+| `VENDOR_NOT_AUTHORIZED` | Vendor not approved for this school |
+| `TRANSFER_PENDING` | Student has pending transfer |
+| `DUPLICATE_TRANSACTION` | Transaction already processed |
+
+---
+
+## Rate Limits
+
+| Endpoint | Limit |
+|----------|-------|
+| Payment APIs | 100/minute |
+| Query APIs | 300/minute |
+| Webhook registration | 10/hour |
+
+---
+
+## SDKs
+
+Coming soon:
+- PHP SDK
+- JavaScript/Node.js SDK
+- Python SDK

@@ -1,0 +1,113 @@
+---
+title: "5 · Send the customer to pay"
+description: "Open the hosted payment page and bring the customer back."
+---
+
+# Chapter 5 · Send the customer to pay
+
+In Chapter 4 your server got back a `paymentUrl`. Now you put the customer in
+front of it. Peeap hosts the whole payment experience — you don't build a card
+form or a mobile-money flow yourself.
+
+## Send them to the payment URL
+
+The `paymentUrl` looks like:
+
+```
+https://checkout.peeap.com/popup.html?session=cs_3f9a8b2c1d4e5f60718293a4b5c6d7e8
+```
+
+How you get the customer there depends on your app:
+
+<CodeGroup>
+
+```javascript Browser redirect
+// Simplest: full-page redirect to the hosted page
+window.location.href = session.paymentUrl;
+```
+
+```html Link / button
+<a href="https://checkout.peeap.com/popup.html?session=cs_...">
+  Pay 50 SLE
+</a>
+```
+
+```javascript Popup window
+// Open in a popup and keep your page in the background
+window.open(session.paymentUrl, "peeap_checkout", "width=480,height=720");
+```
+
+</CodeGroup>
+
+<Note>
+Your **server** created the session (Chapter 4) and handed the `paymentUrl` to
+your page. Sending the browser to that URL is the one part that happens in the
+customer's browser — that's expected and safe, because the URL only contains a
+session id, not a key.
+</Note>
+
+## What the customer sees
+
+The hosted page shows your **business name** and the amount, then offers the
+payment methods you support:
+
+<CardGroup cols={3}>
+  <Card title="Mobile money" icon="mobile">
+    Orange Money / Africell Money via Monime. The customer approves on their phone.
+  </Card>
+  <Card title="Peeap card / wallet" icon="credit-card">
+    Customers with a Peeap account pay straight from their balance.
+  </Card>
+  <Card title="QR code" icon="qrcode">
+    The customer scans with the Peeap app to pay.
+  </Card>
+</CardGroup>
+
+You don't have to do anything to enable these — Peeap renders them. The customer
+picks one, authorises, and Peeap collects the funds.
+
+## Bringing the customer back
+
+When you created the session you passed a `redirectUrl` (Chapter 4). After the
+payment finishes, Peeap sends the customer's browser back to it with details
+appended to the query string:
+
+```
+https://yourstore.com/payment/return
+    ?status=success
+    &session_id=cs_3f9a8b2c1d4e5f60718293a4b5c6d7e8
+    &reference=order_1234
+    &amount=50
+    &currency=SLE
+    &payment_method=mobile_money
+```
+
+So your return page can read `status`, `session_id`, and your own `reference` to
+know which order this was.
+
+<Warning>
+**Do not trust the redirect.** The customer's browser controls that URL — anyone
+can type `?status=success` by hand. The redirect is only a *hint* that the flow
+finished. Before you mark the order paid or ship anything, your **server** must
+independently confirm the session is really `COMPLETE`. That's exactly what
+Chapter 6 does, and it's the single most important rule in this book.
+</Warning>
+
+<Tip>
+**Advanced** — Treat the return page purely as UX: show a "thanks, we're
+confirming your payment" spinner, then have it poll your own backend (which in
+turn checks the session — Chapter 6) or wait for your webhook (Part 3) before
+flipping the order to paid. Never let the browser's `?status=success` be the thing
+that releases goods.
+</Tip>
+
+## If the customer abandons
+
+If they close the page or never pay, nothing happens — the session simply
+`EXPIRED`s after 30 minutes. No money moves and you owe nothing. Next time the
+customer tries, create a brand-new session.
+
+## Confirm it for real
+
+The customer says they paid. Don't take their word — or their browser's. Continue
+to [Chapter 6 → Confirm the payment](/guide/confirm-the-payment).

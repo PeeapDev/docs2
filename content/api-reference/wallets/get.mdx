@@ -1,0 +1,86 @@
+---
+title: Get Wallet
+api: GET /wallets/{walletId}
+description: "Get a specific wallet by ID"
+---
+
+# Get Wallet
+
+Retrieve details for a specific wallet.
+
+## Endpoint
+
+```
+GET /wallets/{walletId}
+```
+
+## Path Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `walletId` | string | Yes | The wallet ID |
+
+## Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes | Bearer access token |
+
+## Example Request
+
+```bash
+curl https://api.paymentsystem.com/v1/wallets/wal_abc123 \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+## Response
+
+### Success (200 OK)
+
+```json
+{
+  "id": "wal_abc123",
+  "externalId": "wal_1234567890",
+  "ownerId": "usr_xyz789",
+  "ownerType": "USER",
+  "currencyCode": "USD",
+  "availableBalance": 1000.00,
+  "heldBalance": 50.00,
+  "status": "ACTIVE",
+  "dailyLimit": 5000.00,
+  "monthlyLimit": 50000.00,
+  "dailySpent": 250.00,
+  "monthlySpent": 1500.00,
+  "createdAt": "2024-01-15T10:30:00Z",
+  "updatedAt": "2024-01-20T08:00:00Z"
+}
+```
+
+### Errors
+
+| Status | Code | Description |
+|--------|------|-------------|
+| 401 | `UNAUTHORIZED` | Invalid or missing access token |
+| 403 | `FORBIDDEN` | Wallet belongs to another user |
+| 404 | `NOT_FOUND` | Wallet does not exist |
+
+```json
+{
+  "statusCode": 404,
+  "message": "Wallet not found",
+  "error": "NOT_FOUND"
+}
+```
+
+## Balance Breakdown
+
+| Field | Description |
+|-------|-------------|
+| `availableBalance` | Funds available for spending |
+| `heldBalance` | Funds reserved for pending transactions |
+| `dailySpent` | Amount spent today |
+| `monthlySpent` | Amount spent this month |
+
+<Info>
+  Total balance = availableBalance + heldBalance
+</Info>

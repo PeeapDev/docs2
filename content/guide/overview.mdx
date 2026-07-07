@@ -1,0 +1,83 @@
+---
+title: "Integration Guide"
+description: "Learn to accept payments with Peeap Pay — from zero to your first live transaction."
+---
+
+# Integrate Peeap Pay
+
+This guide is a **hands-on book**, not a reference manual. By the end of Part 1
+you will have taken a real payment. Each chapter builds on the one before it, so
+read them in order the first time through.
+
+<Note>
+**Two readers, one book.** The main text assumes you can make an HTTP request and
+read JSON — that's it. Wherever there's something deeper for experienced
+developers, you'll see an **Advanced** callout like the one below. Beginners can
+safely skip those on a first read.
+</Note>
+
+<Tip>
+**Advanced** — callouts like this go past the happy path: idempotency, race
+conditions, signature verification, reconciliation. Come back to them once your
+first payment works.
+</Tip>
+
+## What you'll build
+
+You're going to let a customer pay your business. The flow is the same whether
+you run an online store, a school portal, or a mobile app:
+
+<Steps>
+  <Step title="Get your keys">
+    Create a business in the Peeap dashboard and copy your test and live keys.
+  </Step>
+  <Step title="Create a checkout session">
+    Your server calls Peeap with an amount. Peeap returns a payment link.
+  </Step>
+  <Step title="Send the customer to pay">
+    Open the payment link. The customer pays with mobile money, a Peeap card, or by scanning a QR code.
+  </Step>
+  <Step title="Confirm the money arrived">
+    Your server checks the session status (and later, listens for a webhook) before delivering the goods.
+  </Step>
+</Steps>
+
+## How this book is organised
+
+<CardGroup cols={2}>
+  <Card title="1 · What is Peeap Pay" icon="diagram-project" href="/guide/what-is-peeap-pay">
+    The mental model: who the players are and how money moves.
+  </Card>
+  <Card title="2 · Test vs Live" icon="flask" href="/guide/test-vs-live">
+    Sandbox keys, live keys, and the approval gate.
+  </Card>
+  <Card title="3 · Get your keys" icon="key" href="/guide/get-your-keys">
+    Step-by-step in the merchant dashboard.
+  </Card>
+  <Card title="4 · Create a checkout" icon="cart-shopping" href="/guide/create-a-checkout">
+    Your first real API call.
+  </Card>
+  <Card title="5 · Send the customer to pay" icon="arrow-up-right-from-square" href="/guide/redirect-the-customer">
+    The hosted payment page.
+  </Card>
+  <Card title="6 · Confirm the payment" icon="circle-check" href="/guide/confirm-the-payment">
+    Verify server-side before you trust it.
+  </Card>
+</CardGroup>
+
+## Before you start
+
+You'll need:
+
+- A Peeap account at [my.peeap.com](https://my.peeap.com) (free to create).
+- A way to make HTTP requests from a server you control — `curl`, Node.js,
+  Python, PHP, or any language. **Payments must be created from your server, not
+  from the browser**, because they involve a secret. More on that in Chapter 2.
+
+<Warning>
+Peeap Pay settles in **SLE (New Leone)** — Sierra Leone's redenominated currency
+(2022, three zeros removed). An `amount` of `50` means **50 New Leone**, not 50
+cents and not 50,000 old Leone. Chapter 4 covers currency in detail.
+</Warning>
+
+Ready? Start with [Chapter 1 → What is Peeap Pay](/guide/what-is-peeap-pay).

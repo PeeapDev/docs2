@@ -1,0 +1,105 @@
+---
+title: "1 · What is Peeap Pay"
+description: "The mental model — who the players are and how money moves."
+---
+
+# Chapter 1 · What is Peeap Pay
+
+Before you write any code, get the mental model right. Most integration bugs come
+from a wrong picture of who holds the money and when.
+
+## The one-sentence version
+
+> Peeap Pay lets your business collect money from a customer and have it land in
+> your Peeap wallet — without you handling cards, mobile-money APIs, or bank
+> rails yourself.
+
+You make one API call. Peeap does the hard part.
+
+## The four players
+
+<CardGroup cols={2}>
+  <Card title="The customer" icon="user">
+    The person paying. They pay with mobile money (Orange Money, Africell Money), a Peeap card, or by scanning a QR code in the Peeap app.
+  </Card>
+  <Card title="Your business (the merchant)" icon="store">
+    You. You want money to arrive in your Peeap business wallet, and you want to know when it does.
+  </Card>
+  <Card title="Peeap" icon="building-columns">
+    The network. It hosts the payment page, talks to the payment providers, moves the money, and tells you the result.
+  </Card>
+  <Card title="Monime" icon="network-wired">
+    The rails underneath. Peeap uses Monime to reach the mobile-money operators. You never call Monime directly — Peeap does.
+  </Card>
+</CardGroup>
+
+<Tip>
+**Advanced** — Think of Peeap the way you think of a card network: it's a wallet
+and a settlement layer *on top of* the underlying mobile-money rails (Monime),
+the same way Mastercard sits on top of banks. Your integration targets Peeap, and
+Peeap abstracts whichever operator the customer actually used.
+</Tip>
+
+## How money moves
+
+Here's the full lifecycle of a single payment. You'll implement each numbered
+step over Chapters 4–6.
+
+<Steps>
+  <Step title="You create a checkout session">
+    Your **server** tells Peeap "I want to collect 50 SLE for order #1234."
+    Peeap creates a *session* and returns a payment link.
+  </Step>
+  <Step title="The customer opens the link">
+    You send the customer to that link. They see a Peeap-hosted payment page with
+    your business name on it.
+  </Step>
+  <Step title="The customer pays">
+    They choose mobile money, card, or QR and authorise the payment. Peeap (via
+    Monime where needed) collects the funds.
+  </Step>
+  <Step title="Peeap credits your wallet">
+    On success, the money lands in your Peeap **business wallet**.
+  </Step>
+  <Step title="You confirm and deliver">
+    Your server confirms the session is `COMPLETE` (Chapter 6) — *then* you ship
+    the goods or mark the order paid.
+  </Step>
+</Steps>
+
+## What a "session" is
+
+A **checkout session** is a single attempt to collect a specific amount. It has:
+
+- a unique id like `cs_3f9a8b...`
+- an `amount` and `currency` (`SLE`)
+- a `status` — starts at `OPEN`, becomes `COMPLETE` when paid, or `EXPIRED` after 30 minutes
+- a payment link your customer opens
+
+You create one session per payment. If a customer abandons checkout, that session
+simply expires and you create a new one next time.
+
+<Warning>
+**A session is not money in your account.** Creating a session only means "I asked
+to be paid." The money is yours only when the session is `COMPLETE`. Never deliver
+goods on session *creation* — only on confirmed *completion*. Chapter 6 shows how,
+and Part 3 explains why this rule has caused real money to get stuck in the past.
+</Warning>
+
+## Where things live
+
+| Thing | Where |
+| --- | --- |
+| Your dashboard & keys | [my.peeap.com](https://my.peeap.com) → Merchant → Developer |
+| The API your server calls | `https://api.peeap.com` |
+| The page your customer pays on | `https://checkout.peeap.com` |
+
+## Check your understanding
+
+Before moving on, you should be able to answer:
+
+1. Who creates the checkout session — the browser or your server? *(Your server.)*
+2. When is the money actually yours? *(When the session status is `COMPLETE`.)*
+3. Do you ever call Monime or an operator directly? *(No — Peeap does.)*
+
+Got those? Continue to [Chapter 2 → Test vs Live](/guide/test-vs-live).

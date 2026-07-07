@@ -1,0 +1,142 @@
+---
+title: "8 · Idempotency & no double-charges"
+description: "Make 'create' and 'fulfil' safe to run twice — because they will."
+---
+
+# Chapter 8 · Idempotency & no double-charges
+
+In a real system, the same operation runs more than once: a customer double-clicks
+"Pay," a request times out and your HTTP client retries, your foreground poll and
+your background reconciler both spot the same completed payment. **Idempotent**
+code produces the same result no matter how many times it runs. Payment code that
+isn't idempotent loses money.
+
+There are two places this matters: **creating** a session and **fulfilling** an
+order.
+
+## 1. Idempotent session creation
+
+If your "Pay" button is clicked twice, or a timeout makes your server retry
+`POST /api/checkout/create`, you could create two sessions for one order — and
+potentially charge the customer twice.
+
+Peeap solves this with an **`idempotencyKey`**. Pass a stable, unique-per-order
+string and Peeap returns the **existing** session instead of making a new one:
+
+<CodeGroup>
+
+```javascript Node.js
+const res = await fetch("https://api.peeap.com/api/checkout/create", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    publicKey: process.env.PEEAP_PUBLIC_KEY,
+    amount: 50,
+    currency: "SLE",
+    reference: "order_1234",
+    idempotencyKey: "order_1234", // stable per order
+  }),
+});
+const session = await res.json();
+```
+
+```bash curl
+curl -X POST https://api.peeap.com/api/checkout/create \
+  -H "Content-Type: application/json" \
+  -d '{
+    "publicKey": "pk_test_xxx",
+    "amount": 50,
+    "reference": "order_1234",
+    "idempotencyKey": "order_1234"
+  }'
+```
+
+</CodeGroup>
+
+The first call creates session `cs_abc…`. Every later call with
+`idempotencyKey: "order_1234"` returns that **same** `cs_abc…`, with a tell-tale
+message:
+
+```json
+{
+  "paymentId": "cs_abc...",
+  "sessionId": "cs_abc...",
+  "paymentUrl": "https://checkout.peeap.com/popup.html?session=cs_abc...",
+  "status": "OPEN",
+  "message": "Existing session returned (idempotency)"
+}
+```
+
+<Note>
+**Choosing a good key.** Use something that's unique to *this purchase attempt* and
+stable across retries — your order id is usually perfect. Don't use a timestamp or
+random value (it changes on retry, defeating the point), and don't reuse a key for
+a genuinely new purchase (you'd get the old session back).
+</Note>
+
+<Tip>
+**Advanced** — If a customer legitimately wants to pay for the *same* order again
+after the first session expired (e.g. they abandoned it), use a key that
+incorporates the attempt — `order_1234:attempt_2` — so they get a fresh session
+rather than the expired one.
+</Tip>
+
+## 2. Idempotent fulfilment
+
+This is the one that bites hardest. Both your foreground poll **and** your
+background reconciler ([Chapter 7](/guide/confirming-payments)) can observe the same
+session reaching `COMPLETE`. If "fulfil order" isn't idempotent, you ship twice,
+credit twice, or send two receipts.
+
+Guard fulfilment with a **once-only** check, ideally enforced by your database:
+
+```javascript
+async function fulfilOrderOnce(sessionId, session) {
+  // Atomic: only the FIRST caller flips OPEN -> PAID and proceeds.
+  const claimed = await db.sessions.updateWhere(
+    { sessionId, status: "OPEN" },     // condition
+    { status: "PAID", paidAt: now() }  // update
+  );
+  if (claimed.rowCount === 0) return;  // someone already fulfilled it — stop
+
+  await shipGoods(session.reference);
+  await sendReceipt(session.reference);
+}
+```
+
+The key idea: **claim the work atomically before doing it.** The database lets
+exactly one caller transition `OPEN → PAID`; everyone else no-ops. A unique
+constraint on `(sessionId)` in your fulfilment/ledger table achieves the same
+thing.
+
+<Warning>
+Don't do "read status, then write" in two separate steps without a guard — that's
+a race. Two workers both read `OPEN`, both decide to fulfil, both ship. Use a
+conditional update (as above) or a unique constraint so the *database* enforces
+once-only, not your application logic.
+</Warning>
+
+## Always re-check the amount
+
+Idempotency keeps you from acting twice; it doesn't tell you the payment was
+*correct*. Every time you fulfil, re-verify against your own record:
+
+```javascript
+const ok =
+  session.status === "COMPLETE" &&
+  Number(session.amount) === order.expectedAmount &&
+  session.reference === order.reference;
+
+if (!ok) return flagForReview(sessionId);
+```
+
+## Recap
+
+- **Creating:** pass `idempotencyKey` so retries return the same session, never a
+  duplicate.
+- **Fulfilling:** claim the session atomically (`OPEN → PAID`) so it's processed
+  exactly once, no matter how many workers see it complete.
+- **Always:** re-check amount and reference before delivering.
+
+Next, the messy middle — what happens when things go wrong. Continue to
+[Chapter 9 → Handling failures](/guide/handling-failures).

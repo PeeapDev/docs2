@@ -1,0 +1,98 @@
+---
+title: "2 · Test vs Live"
+description: "Sandbox keys, live keys, and the approval gate."
+---
+
+# Chapter 2 · Test vs Live
+
+Every Peeap business gets **two sets of keys**: one for testing with fake money,
+one for taking real money. Understanding the difference now will save you from
+the two most common mistakes — testing against live, and shipping with test keys.
+
+## Public keys and secret keys
+
+Each mode has a **public key** and a **secret key**:
+
+| Key | Prefix (test) | Prefix (live) | Used for |
+| --- | --- | --- | --- |
+| Public key | `pk_test_…` | `pk_live_…` | Creating checkout sessions. Safe to use from a server; identifies your business. |
+| Secret key | `sk_test_…` | `sk_live_…` | Server-to-server calls and signing. **Never expose this.** |
+
+<Warning>
+**Secret keys are passwords.** A `sk_live_…` key can move real money. Never put it
+in front-end JavaScript, a mobile app bundle, a public Git repo, or a URL. Keep it
+in a server environment variable. If one leaks, rotate it in the dashboard
+immediately.
+</Warning>
+
+<Note>
+For the first payment you build in this guide, you only need the **public key**
+(`pk_test_…`). Public keys are how a checkout session is created. We'll use a test
+public key all the way through Chapter 6.
+</Note>
+
+## Test mode vs live mode
+
+Peeap decides which mode you're in **from the key prefix** — there's no separate
+setting to flip.
+
+- A `pk_test_…` key creates a **test** session. No real money moves. Use this for
+  all development.
+- A `pk_live_…` key creates a **live** session. Real money moves.
+
+<Tip>
+**Advanced** — Because mode is derived from the key prefix
+(`key.startsWith('pk_test_')`), the same code path serves both. Wire your test and
+live keys to an environment variable (`PEEAP_PUBLIC_KEY`) and switch by
+environment — never branch on a hardcoded mode flag.
+</Tip>
+
+## The approval gate (live mode only)
+
+New businesses can test freely, but going fully live needs Peeap's approval. Your
+business has an **approval status**:
+
+| Status | What live mode does |
+| --- | --- |
+| `PENDING` | You can run a small number of **trial** live transactions (2 by default) so you can verify the real flow end-to-end. After that, live calls are blocked until approval. |
+| `APPROVED` | Unlimited live transactions. |
+| `REJECTED` | No live access. Contact support. |
+| `SUSPENDED` | No live access. Contact support. |
+
+Test mode is **never** gated — `pk_test_…` always works, regardless of approval
+status. So you can build and test your entire integration before approval; you
+only need approval to take real money at volume.
+
+<Warning>
+If your live integration suddenly returns `403 Trial limit reached`, you haven't
+hit a bug — you've used your trial transactions while still `PENDING`. Wait for
+approval, or contact support to get approved.
+</Warning>
+
+## The golden rule
+
+> **Develop on `pk_test_`. Ship on `pk_live_`. Read the key from the
+> environment, never hardcode it.**
+
+A simple setup that keeps you safe:
+
+```bash
+# .env on your development machine
+PEEAP_PUBLIC_KEY=pk_test_xxxxxxxxxxxxx
+
+# .env in production (set in your host's dashboard, never committed)
+PEEAP_PUBLIC_KEY=pk_live_xxxxxxxxxxxxx
+```
+
+Your code reads `process.env.PEEAP_PUBLIC_KEY` and never knows or cares which mode
+it's in.
+
+## Check your understanding
+
+1. Which key creates a checkout session — public or secret? *(Public.)*
+2. How does Peeap know if a payment is test or live? *(The key prefix.)*
+3. Can you test your whole integration before Peeap approves your business?
+   *(Yes — test mode is never gated.)*
+
+Next, let's actually get your keys. Continue to
+[Chapter 3 → Get your keys](/guide/get-your-keys).

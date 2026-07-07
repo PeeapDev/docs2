@@ -1,0 +1,122 @@
+---
+title: Plugin Apps
+description: "Build mini-apps that run natively inside the Peeap platform — like WeChat mini-programs for payments."
+---
+
+# Plugin Apps
+
+Build micro-apps that run natively inside Peeap. Each app gets its own backend and database, but renders seamlessly inside the platform with full access to wallets, payments, chat, contacts, and notifications.
+
+## How It Works
+
+<Steps>
+  <Step title="Build Your App">
+    Write a React component that uses the PeeapSDK. Your app has its own Supabase backend for data storage.
+  </Step>
+  <Step title="Test in Playground">
+    Use the SDK playground to test every API call with real data before submitting.
+  </Step>
+  <Step title="Submit for Review">
+    Upload your bundle with a manifest file. Our team reviews it within 48 hours.
+  </Step>
+  <Step title="Go Live">
+    Once approved, your app appears in the Peeap App Store. Users install and use it directly inside the platform.
+  </Step>
+</Steps>
+
+## What You Get
+
+<CardGroup cols={2}>
+  <Card title="Wallets & Payments" icon="wallet">
+    Read balances, list wallets, view transactions, send money, and request payments from users.
+  </Card>
+  <Card title="Chat & Messaging" icon="comments">
+    Send messages, read conversations, and integrate with the platform's messaging system.
+  </Card>
+  <Card title="Contacts & Users" icon="address-book">
+    Search platform users by name, phone, or email. Look up user profiles.
+  </Card>
+  <Card title="Notifications" icon="bell">
+    Send real push notifications to any user. Read and manage notification state.
+  </Card>
+  <Card title="Platform Database" icon="database">
+    Admin-activated apps get direct read access to platform tables like users, wallets, and transactions.
+  </Card>
+  <Card title="Own Backend" icon="server">
+    Each app can have its own Supabase project for storing custom data, completely separate from the platform.
+  </Card>
+</CardGroup>
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────┐
+│                  Peeap Platform                   │
+│                                                    │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐        │
+│  │ Your App │  │ App B    │  │ App C    │        │
+│  │ (React)  │  │ (React)  │  │ (React)  │        │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘        │
+│       │              │              │              │
+│  ┌────▼──────────────▼──────────────▼────┐        │
+│  │           PeeapSDK (scoped)           │        │
+│  │  auth | wallet | chat | contacts      │        │
+│  │  notifications | platform | storage   │        │
+│  └────┬──────────────────────────┬───────┘        │
+│       │                          │                 │
+│  ┌────▼────────────┐    ┌───────▼────────┐        │
+│  │ Peeap Services  │    │  Your Supabase │        │
+│  │ (wallets, chat, │    │  (your data)   │        │
+│  │  notifications) │    │                │        │
+│  └─────────────────┘    └────────────────┘        │
+└──────────────────────────────────────────────────┘
+```
+
+## Quick Example
+
+```javascript
+export default function MyApp({ sdk }) {
+  const [user, setUser] = React.useState(null);
+  const [wallets, setWallets] = React.useState([]);
+
+  React.useEffect(() => {
+    async function load() {
+      const u = await sdk.auth.getCurrentUser();
+      setUser(u);
+      const w = await sdk.wallet.listWallets();
+      setWallets(w);
+    }
+    load();
+  }, []);
+
+  if (!user) return <div>Loading...</div>;
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h1>Hello, {user.firstName}!</h1>
+      {wallets.map(w => (
+        <div key={w.id}>
+          <strong>{w.currency}</strong>: {w.balance.toFixed(2)}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Manifest Spec" icon="file-code" href="/plugins/manifest">
+    Learn about the required manifest file and permissions
+  </Card>
+  <Card title="SDK Reference" icon="code" href="/plugins/sdk-reference">
+    Full API reference for all SDK methods
+  </Card>
+  <Card title="Playground" icon="flask" href="/plugins/playground">
+    Test every SDK endpoint with live examples
+  </Card>
+  <Card title="Submission" icon="paper-plane" href="/plugins/submission">
+    How to package and submit your app for review
+  </Card>
+</CardGroup>

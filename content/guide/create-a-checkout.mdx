@@ -1,0 +1,202 @@
+---
+title: "4 · Create a checkout"
+description: "Your first real API call — create a checkout session and get a payment link."
+---
+
+# Chapter 4 · Create a checkout
+
+This is the heart of the integration. One API call from your server turns "I want
+50 SLE for order #1234" into a payment link you can send a customer. If you only
+ever learn one Peeap call, it's this one.
+
+## The endpoint
+
+```http
+POST https://api.peeap.com/api/checkout/create
+Content-Type: application/json
+```
+
+Authentication is done **in the request body** with your public key — there's no
+auth header to set.
+
+## The request
+
+The only required fields are `publicKey` and `amount`. Everything else is
+optional but recommended.
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `publicKey` | ✅ | Your `pk_test_…` or `pk_live_…` key. Identifies your business and sets the mode. |
+| `amount` | ✅ | A **number** in New Leone. `50` = 50 SLE. Must be greater than 0. |
+| `currency` | — | Defaults to `"SLE"`. See [Currency](#a-word-on-currency) below. |
+| `description` | — | What the customer is paying for. Shown on the payment page. |
+| `reference` | — | **Your** order id (e.g. `"order_1234"`). Comes back to you later so you can match the payment to the order. |
+| `redirectUrl` | — | Where the customer is sent after paying. |
+| `idempotencyKey` | — | A unique string that prevents accidental double-charges. See the Advanced note. |
+| `customerEmail` | — | Pre-fills the customer's email. |
+| `customerPhone` | — | Pre-fills the customer's mobile-money number (e.g. `+23276123456`). |
+| `metadata` | — | Any JSON object of your own data; stored with the session and returned to you. |
+
+### Example
+
+<CodeGroup>
+
+```bash curl
+curl -X POST https://api.peeap.com/api/checkout/create \
+  -H "Content-Type: application/json" \
+  -d '{
+    "publicKey": "pk_test_xxxxxxxxxxxxx",
+    "amount": 50,
+    "currency": "SLE",
+    "description": "Order #1234",
+    "reference": "order_1234",
+    "redirectUrl": "https://yourstore.com/payment/return",
+    "customerEmail": "ada@example.com",
+    "customerPhone": "+23276123456"
+  }'
+```
+
+```javascript Node.js
+const res = await fetch("https://api.peeap.com/api/checkout/create", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    publicKey: process.env.PEEAP_PUBLIC_KEY, // pk_test_… in dev
+    amount: 50,
+    currency: "SLE",
+    description: "Order #1234",
+    reference: "order_1234",
+    redirectUrl: "https://yourstore.com/payment/return",
+    customerEmail: "ada@example.com",
+    customerPhone: "+23276123456",
+  }),
+});
+
+const session = await res.json();
+console.log(session.paymentUrl); // send the customer here (Chapter 5)
+```
+
+```python Python
+import os, requests
+
+res = requests.post(
+    "https://api.peeap.com/api/checkout/create",
+    json={
+        "publicKey": os.environ["PEEAP_PUBLIC_KEY"],  # pk_test_… in dev
+        "amount": 50,
+        "currency": "SLE",
+        "description": "Order #1234",
+        "reference": "order_1234",
+        "redirectUrl": "https://yourstore.com/payment/return",
+        "customerEmail": "ada@example.com",
+        "customerPhone": "+23276123456",
+    },
+)
+session = res.json()
+print(session["paymentUrl"])  # send the customer here (Chapter 5)
+```
+
+```php PHP
+<?php
+$ch = curl_init("https://api.peeap.com/api/checkout/create");
+curl_setopt_array($ch, [
+  CURLOPT_RETURNTRANSFER => true,
+  CURLOPT_POST => true,
+  CURLOPT_HTTPHEADER => ["Content-Type: application/json"],
+  CURLOPT_POSTFIELDS => json_encode([
+    "publicKey"   => getenv("PEEAP_PUBLIC_KEY"),
+    "amount"      => 50,
+    "currency"    => "SLE",
+    "description" => "Order #1234",
+    "reference"   => "order_1234",
+    "redirectUrl" => "https://yourstore.com/payment/return",
+  ]),
+]);
+$session = json_decode(curl_exec($ch), true);
+echo $session["paymentUrl"]; // send the customer here (Chapter 5)
+```
+
+</CodeGroup>
+
+<Warning>
+Make this call **from your server**, never from browser JavaScript. Even though
+the public key is less sensitive than the secret key, creating sessions
+client-side lets anyone tamper with the amount before it reaches you. The customer
+interacts with the browser; your server creates the session.
+</Warning>
+
+## The response
+
+A successful call returns `200` with:
+
+```json
+{
+  "paymentId": "cs_3f9a8b2c1d4e5f60718293a4b5c6d7e8",
+  "sessionId": "cs_3f9a8b2c1d4e5f60718293a4b5c6d7e8",
+  "paymentUrl": "https://checkout.peeap.com/popup.html?session=cs_3f9a8b2c1d4e5f60718293a4b5c6d7e8",
+  "expiresAt": "2026-06-26T15:30:00.000Z",
+  "amount": 50,
+  "currency": "SLE",
+  "businessName": "Your Store",
+  "isTestMode": true
+}
+```
+
+The two fields you care about:
+
+- **`paymentUrl`** — the link you send the customer to (Chapter 5).
+- **`sessionId`** — save this against your order. You'll use it to confirm payment
+  (Chapter 6).
+
+<Note>
+`sessionId` and `paymentId` are the same value — Peeap returns both names for
+convenience. Store one against your order in your database now; you'll need it in
+Chapter 6.
+</Note>
+
+The session is valid for **30 minutes**. After that its status becomes `EXPIRED`
+and the link no longer works — create a fresh session if the customer comes back.
+
+## A word on currency
+
+Peeap settles in **SLE — the New Leone**. Sierra Leone redenominated in 2022,
+removing three zeros, so amounts are small whole numbers:
+
+- `amount: 50` → **50 New Leone**
+- `amount: 1500` → **1,500 New Leone**
+
+Peeap normalises common variants for you — `NLE`, `Le`, `Leone` all become `SLE`,
+and an old-Leone code (`SLL`) is divided by 1,000. Even so, **always send `SLE`
+and new-Leone amounts** so there's no ambiguity. An amount above 100,000 SLE is
+flagged as suspicious (it usually means someone passed old-Leone values).
+
+<Tip>
+**Advanced — idempotency.** If your "Pay" button is double-clicked or your request
+times out and retries, you could create two sessions for one order. Pass a stable
+`idempotencyKey` (e.g. your order id plus a hash of the amount) and Peeap returns
+the **existing** session instead of creating a duplicate:
+
+```json
+{ "publicKey": "...", "amount": 50, "reference": "order_1234",
+  "idempotencyKey": "order_1234" }
+```
+
+The second call with the same `idempotencyKey` returns the original `sessionId`
+and a `"message": "Existing session returned (idempotency)"`. Use this for every
+real integration — Part 3 goes deeper on not double-charging.
+</Tip>
+
+## Common errors
+
+| Status | Meaning | Fix |
+| --- | --- | --- |
+| `400 Valid amount is required` | `amount` missing, not a number, or ≤ 0. | Send a positive number. |
+| `400 publicKey is required` | No `publicKey` in the body. | Add your `pk_…` key. |
+| `400 Invalid public key format` | Key doesn't start with `pk_live_` / `pk_test_`. | Check you copied a **public** key. |
+| `401 Invalid public key or business not active` | Key doesn't match an active business. | Re-copy the key; confirm the business isn't suspended. |
+| `403 Trial limit reached` | Live key, business still `PENDING`, trial used up. | Wait for approval (see [Chapter 2](/guide/test-vs-live)). |
+
+## You just created a payment
+
+You have a `paymentUrl`. Next, get the customer to it. Continue to
+[Chapter 5 → Send the customer to pay](/guide/redirect-the-customer).

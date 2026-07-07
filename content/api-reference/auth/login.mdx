@@ -1,0 +1,116 @@
+---
+title: Login
+api: POST /auth/login
+description: "Authenticate and receive tokens"
+---
+
+# Login
+
+Authenticate an existing user and receive access and refresh tokens.
+
+## Endpoint
+
+```
+POST /auth/login
+```
+
+## Request Body
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `email` | string | Yes | User's email address |
+| `password` | string | Yes | User's password |
+| `mfaCode` | string | No | 6-digit MFA code (if MFA is enabled) |
+
+## Example Request
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "SecurePass123!"
+  }'
+```
+
+## Response
+
+### Success (200 OK)
+
+```json
+{
+  "user": {
+    "id": "usr_abc123",
+    "email": "user@example.com",
+    "firstName": "John",
+    "lastName": "Doe",
+    "kycStatus": "APPROVED",
+    "kycTier": 2
+  },
+  "tokens": {
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "expiresIn": 900,
+    "tokenType": "Bearer"
+  }
+}
+```
+
+### MFA Required
+
+If MFA is enabled for the account:
+
+```json
+{
+  "tokens": {
+    "tokenType": "mfa_required"
+  }
+}
+```
+
+Submit the MFA code to complete login:
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "SecurePass123!",
+    "mfaCode": "123456"
+  }'
+```
+
+### Errors
+
+| Status | Code | Description |
+|--------|------|-------------|
+| 401 | `INVALID_CREDENTIALS` | Email or password is incorrect |
+| 401 | `INVALID_MFA_CODE` | MFA code is incorrect or expired |
+| 403 | `ACCOUNT_LOCKED` | Account locked due to too many failed attempts |
+| 403 | `ACCOUNT_SUSPENDED` | Account has been suspended |
+| 429 | `RATE_LIMITED` | Too many login attempts |
+
+```json
+{
+  "statusCode": 401,
+  "message": "Invalid credentials",
+  "error": "INVALID_CREDENTIALS"
+}
+```
+
+## Rate Limiting
+
+Login attempts are rate-limited to prevent brute force attacks:
+
+- **5 failed attempts**: 1-minute lockout
+- **10 failed attempts**: 5-minute lockout
+- **15 failed attempts**: Account locked (requires support intervention)
+
+## Token Lifetimes
+
+| Token | Lifetime |
+|-------|----------|
+| Access Token | 15 minutes |
+| Refresh Token | 7 days |
+
+Use the [Refresh](/api-reference/auth/refresh) endpoint to obtain new tokens without re-authenticating.

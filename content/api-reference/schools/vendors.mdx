@@ -1,0 +1,215 @@
+---
+title: 'Vendors API'
+description: 'Manage approved vendors who can sell to your students'
+api: 'GET /api/schools/{schoolId}/vendors'
+---
+
+# Vendors API
+
+Control which Peeap merchants can sell to your students. Vendors are existing Peeap merchants that you approve to operate within your school ecosystem.
+
+## How It Works
+
+1. Search for Peeap merchants by username or phone
+2. Approve them as vendors for your school
+3. Their products become available to your students
+4. You can block specific products or suspend vendors
+
+## List Approved Vendors
+
+```bash
+GET /api/schools/{schoolId}/vendors
+```
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `status` | string | Filter: `active`, `suspended` |
+| `page` | integer | Page number |
+| `limit` | integer | Items per page |
+
+### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "vendors": [
+      {
+        "id": "vendor_001",
+        "merchantId": "merch_abc123",
+        "userId": "usr_xyz789",
+        "username": "campus_canteen",
+        "businessName": "Campus Canteen",
+        "merchantName": "John's Enterprises",
+        "category": "Food & Beverages",
+        "logo": "https://cdn.peeap.com/merchants/logo.jpg",
+        "status": "active",
+        "approvedAt": "2024-01-15T10:00:00Z",
+        "approvedBy": "admin_001",
+        "stats": {
+          "productCount": 24,
+          "totalSales": 1500000,
+          "transactionCount": 450,
+          "blockedProducts": 2
+        }
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 50,
+      "total": 8
+    }
+  }
+}
+```
+
+## Search Peeap Merchants
+
+Search for merchants to add as vendors. Uses the same search as Peeap's contact search.
+
+```bash
+GET /api/merchants/search
+```
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `q` | string | Search query (username, phone, name) |
+| `type` | string | Filter: `merchant` (only merchants) |
+
+<CodeGroup>
+```bash cURL
+curl -X GET "https://api.peeap.com/v1/merchants/search?q=@canteen&type=merchant" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript JavaScript
+const response = await fetch(
+  `https://api.peeap.com/v1/merchants/search?q=${encodeURIComponent('@canteen')}&type=merchant`,
+  {
+    headers: {
+      'Authorization': `Bearer ${apiKey}`
+    }
+  }
+);
+```
+</CodeGroup>
+
+### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "merchants": [
+      {
+        "id": "usr_abc123",
+        "merchantId": "merch_xyz789",
+        "username": "campus_canteen",
+        "firstName": "John",
+        "lastName": "Smith",
+        "businessName": "Campus Canteen",
+        "category": "Food & Beverages",
+        "profilePicture": "https://cdn.peeap.com/users/avatar.jpg",
+        "isApprovedForSchool": false
+      }
+    ]
+  }
+}
+```
+
+## Add Vendor
+
+Approve a Peeap merchant as a vendor for your school.
+
+```bash
+POST /api/schools/{schoolId}/vendors
+```
+
+### Request Body
+
+```json
+{
+  "userId": "usr_abc123"
+}
+```
+
+The API will verify the user is a merchant (has POS/business) before approving.
+
+### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "vendor_001",
+    "merchantId": "merch_xyz789",
+    "userId": "usr_abc123",
+    "businessName": "Campus Canteen",
+    "status": "active",
+    "approvedAt": "2024-01-15T10:00:00Z",
+    "message": "Vendor approved successfully"
+  }
+}
+```
+
+### Error: Not a Merchant
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "NOT_A_MERCHANT",
+    "message": "This user does not have a merchant account"
+  }
+}
+```
+
+## Remove Vendor
+
+```bash
+DELETE /api/schools/{schoolId}/vendors/{vendorId}
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "message": "Vendor removed from school"
+}
+```
+
+## Suspend/Activate Vendor
+
+```bash
+PATCH /api/schools/{schoolId}/vendors/{vendorId}
+```
+
+### Request Body
+
+```json
+{
+  "status": "suspended"
+}
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "vendor_001",
+    "status": "suspended",
+    "updatedAt": "2024-01-20T10:00:00Z"
+  }
+}
+```
+
+<Note>
+Suspending a vendor hides all their products from your school shop but doesn't affect their ability to sell to other schools or regular Peeap users.
+</Note>

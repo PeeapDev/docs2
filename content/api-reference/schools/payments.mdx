@@ -1,0 +1,346 @@
+---
+title: 'Payments API'
+description: 'Process payments for students using school QR codes'
+api: 'POST /api/schools/{schoolId}/payments'
+---
+
+# Payments API
+
+Process payments from student wallets using the school's existing QR code system.
+
+<Note>
+Schools use their **own QR codes** (format: `student-{id}`). Unlike Peeap's universal QR codes that work with any merchant, school student QR codes are tied to a specific school via `school_id`. This ensures students can only transact within their school's ecosystem.
+</Note>
+
+## SaaS-Aware Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    VENDOR TERMINAL (at School A)                 │
+│                    Provisioned with school_id: 1                 │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                    Student scans: "student-45"
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│              GET /api/school/1/student-view/45                   │
+│                                                                  │
+│   ✅ Student 45 exists at School 1 → Return profile              │
+│   ❌ Student 45 from School 2 → 404 Not Found                    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Payment Flow
+
+```
+1. Terminal authenticates and gets school context
+2. Student presents ID card with school QR code (student-{id})
+3. Vendor scans QR → calls /api/school/{school_id}/student-view/{id}
+4. API validates student belongs to this school
+5. Terminal shows student info and wallet balance
+6. Vendor enters amount → calls /payments/authorize
+7. Student enters PIN on vendor device
+8. Payment completes → receipts sent
+```
+
+## Get School Info (Terminal Discovery)
+
+When a payment terminal first connects, it should identify its school environment.
+
+```bash
+GET /api/peeap-pay/system-info
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "school_id": 1,
+  "school_name": "Government Secondary School",
+  "currency": "SLE"
+}
+```
+
+## Resolve Student from QR Code
+
+When a QR code (format: `student-{id}`) is scanned, use the school-specific endpoint to retrieve the student profile. This ensures the student belongs to the correct institution.
+
+```bash
+GET /api/school/{school_id}/student-view/{id}
+```
+
+### URL Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `school_id` | integer | The unique ID of the school (Tenant ID) |
+| `id` | integer | The numeric ID from the QR code (e.g., `45` from `student-45`) |
+
+### Example Request
+
+```bash
+GET /api/school/1/student-view/45
+```
+
+### Success Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "student_detail": {
+      "id": 45,
+      "full_name": "Abu Bakar Kamara",
+      "admission_no": "2023001",
+      "school_id": 1,
+      "class": "Senior Secondary 1",
+      "section": "A"
+    },
+    "wallet": {
+      "id": "wal_xyz789",
+      "balance": 50000,
+      "currency": "SLE"
+    }
+  }
+}
+```
+
+### Cross-School Prevention
+
+If a student from School B tries to scan their QR at School A:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "STUDENT_NOT_FOUND",
+    "message": "Student not found at this school"
+  }
+}
+```
+
+<Warning>
+The terminal's `school_id` must match the student's school. This prevents cross-school transactions and ensures proper financial boundaries.
+</Warning>
+
+## Authorize Payment
+
+After the student enters their PIN and the vendor enters the amount:
+
+```bash
+POST /api/schools/{schoolId}/payments/authorize
+```
+
+### Request Body
+
+```json
+{
+  "sessionId": "pay_session_abc123",
+  "amount": 15000,
+  "pin": "1234",
+  "description": "Lunch - Rice & Chicken",
+  "items": [
+    {
+      "productId": "prod_001",
+      "quantity": 1,
+      "price": 15000
+    }
+  ]
+}
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "transactionId": "txn_abc123",
+    "status": "completed",
+    "amount": 15000,
+    "currency": "SLE",
+    "student": {
+      "id": "stu_001",
+      "name": "John Doe",
+      "newBalance": 35000
+    },
+    "vendor": {
+      "id": "vendor_001",
+      "businessName": "Campus Canteen"
+    },
+    "receipt": {
+      "id": "rcpt_xyz789",
+      "url": "https://receipts.peeap.com/rcpt_xyz789"
+    },
+    "timestamp": "2024-01-15T10:02:30Z"
+  }
+}
+```
+
+### Error: Insufficient Balance
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INSUFFICIENT_BALANCE",
+    "message": "Student wallet has insufficient balance",
+    "balance": 10000,
+    "required": 15000
+  }
+}
+```
+
+### Error: Invalid PIN
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_PIN",
+    "message": "Incorrect PIN",
+    "attemptsRemaining": 2
+  }
+}
+```
+
+## Refund Payment
+
+Refund a previous transaction back to the student's wallet.
+
+```bash
+POST /api/schools/{schoolId}/payments/{transactionId}/refund
+```
+
+### Request Body
+
+```json
+{
+  "reason": "Product returned",
+  "amount": 15000
+}
+```
+
+For partial refunds, specify a lower amount than the original transaction.
+
+### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "refundId": "ref_abc123",
+    "originalTransactionId": "txn_abc123",
+    "amount": 15000,
+    "studentNewBalance": 50000,
+    "status": "completed",
+    "message": "Refund processed successfully"
+  }
+}
+```
+
+## Get Transaction History
+
+```bash
+GET /api/schools/{schoolId}/payments
+```
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `studentId` | string | Filter by student |
+| `vendorId` | string | Filter by vendor |
+| `from` | date | Start date (ISO 8601) |
+| `to` | date | End date (ISO 8601) |
+| `type` | string | `purchase`, `refund`, `fee` |
+| `page` | integer | Page number |
+| `limit` | integer | Items per page |
+
+### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "transactions": [
+      {
+        "id": "txn_abc123",
+        "type": "purchase",
+        "amount": 15000,
+        "currency": "SLE",
+        "status": "completed",
+        "student": {
+          "id": "stu_001",
+          "name": "John Doe",
+          "studentId": "STU-2024-001"
+        },
+        "vendor": {
+          "id": "vendor_001",
+          "businessName": "Campus Canteen"
+        },
+        "description": "Lunch - Rice & Chicken",
+        "timestamp": "2024-01-15T10:02:30Z"
+      }
+    ],
+    "summary": {
+      "totalAmount": 1500000,
+      "transactionCount": 156,
+      "period": {
+        "from": "2024-01-01",
+        "to": "2024-01-31"
+      }
+    },
+    "pagination": {
+      "page": 1,
+      "limit": 50,
+      "total": 156
+    }
+  }
+}
+```
+
+## Get Student Fees
+
+Retrieve what a student owes at their specific school. Use this for fee payment flows.
+
+```bash
+GET /api/school/{school_id}/student-fees/{id}
+```
+
+### URL Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `school_id` | integer | The unique ID of the school (Tenant ID) |
+| `id` | integer | The student ID |
+
+### Response
+
+```json
+{
+  "success": true,
+  "school_name": "Government Secondary School",
+  "student_name": "Abu Bakar Kamara",
+  "total_due": 155000,
+  "fees_breakdown": [
+    { "id": 101, "name": "Tuition", "amount": 150000 },
+    { "id": 102, "name": "Bus", "amount": 5000 }
+  ]
+}
+```
+
+## Security Requirements
+
+All API requests must include:
+
+| Header | Value | Description |
+|--------|-------|-------------|
+| `Accept` | `application/json` | Required for all requests |
+| `Authorization` | `Bearer {API_TOKEN}` | API token with school permissions |
+
+<Warning>
+The `API_TOKEN` used must have permissions for the specific `school_id` requested. Cross-school API access is not permitted.
+</Warning>

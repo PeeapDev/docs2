@@ -1,0 +1,134 @@
+---
+title: "Reference"
+description: "Quick-lookup tables for the checkout API — endpoints, statuses, fields, and errors."
+---
+
+# Reference
+
+A condensed lookup for when you've learned the flow and just need the details.
+Everything here is covered in depth in the chapters; this is the cheat sheet.
+
+## Hosts
+
+| Purpose | Base |
+| --- | --- |
+| API (your server calls this) | `https://api.peeap.com` |
+| Hosted payment page (customer) | `https://checkout.peeap.com` |
+| Dashboard & keys | `https://my.peeap.com/merchant/developer` |
+
+## Checkout endpoints
+
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| `POST` | `/api/checkout/create` | `publicKey` in body | Create a checkout session → returns `paymentUrl` + `sessionId`. |
+| `GET` | `/api/checkout/sessions/{sessionId}` | none (id is the secret) | Read a session's current state — your **source of truth**. |
+
+<Note>
+There is **no** endpoint to list your payments — persist every `sessionId` you
+create and look them up individually. See [Chapter 10](/guide/reconciliation).
+</Note>
+
+## `POST /api/checkout/create` — request fields
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `publicKey` | string | ✅ | `pk_test_…` or `pk_live_…`. Sets the mode. |
+| `amount` | number | ✅ | In SLE. Must be > 0. |
+| `currency` | string | — | Defaults `"SLE"`. `NLE`/`Le`/`Leone` → `SLE`; `SLL` ÷ 1000. |
+| `description` | string | — | Shown on the payment page. |
+| `reference` | string | — | Your order id; echoed back on the session. |
+| `redirectUrl` | string | — | Customer returns here after paying. `localhost` rejected in live mode. |
+| `idempotencyKey` | string | — | Same key → returns the existing session, never a duplicate. |
+| `customerEmail` | string | — | Pre-fills email. |
+| `customerPhone` | string | — | Pre-fills mobile-money number, e.g. `+23276123456`. |
+| `metadata` | object | — | Arbitrary JSON, stored and returned. |
+
+### Response
+
+```json
+{
+  "paymentId": "cs_…",
+  "sessionId": "cs_…",
+  "paymentUrl": "https://checkout.peeap.com/popup.html?session=cs_…",
+  "expiresAt": "2026-06-26T15:30:00.000Z",
+  "amount": 50,
+  "currency": "SLE",
+  "businessName": "Your Store",
+  "isTestMode": true
+}
+```
+
+## Session status values
+
+| Status | Final? | Meaning |
+| --- | --- | --- |
+| `OPEN` | No | Created, awaiting payment. Becomes `COMPLETE` or `EXPIRED`. |
+| `COMPLETE` | Yes | Paid; funds in your wallet. **The only state you fulfil on.** |
+| `EXPIRED` | Yes | 30 minutes elapsed without payment. |
+
+Sessions expire **30 minutes** after creation.
+
+## Return-URL query parameters
+
+After payment, the browser is sent to your `redirectUrl` with:
+
+| Param | Example | Notes |
+| --- | --- | --- |
+| `status` | `success` | **Untrusted** — the browser controls it. Confirm server-side. |
+| `session_id` | `cs_…` | Use to look up the real status. |
+| `reference` | `order_1234` | Your original reference. |
+| `amount` | `50` | |
+| `currency` | `SLE` | |
+| `payment_method` | `mobile_money` | |
+
+## Keys
+
+| Key | Test | Live | Use |
+| --- | --- | --- | --- |
+| Public | `pk_test_…` | `pk_live_…` | Create sessions. |
+| Secret | `sk_test_…` | `sk_live_…` | Server-to-server / signing. **Never expose.** |
+
+Mode is derived from the **prefix** — there's no separate toggle.
+
+## Approval statuses (live mode)
+
+| Status | Live transactions |
+| --- | --- |
+| `PENDING` | Limited trial (2 by default), then blocked until approved. |
+| `APPROVED` | Unlimited. |
+| `REJECTED` / `SUSPENDED` | None — contact support. |
+
+Test mode (`pk_test_…`) is never gated.
+
+## `create` error responses
+
+| HTTP | Message | Cause |
+| --- | --- | --- |
+| `400` | `Valid amount is required` | `amount` missing / not a number / ≤ 0. |
+| `400` | `publicKey is required` | No key in body. |
+| `400` | `Invalid public key format…` | Key isn't `pk_live_` / `pk_test_`. |
+| `401` | `Invalid public key or business not active` | Key doesn't match an active business. |
+| `403` | `Trial limit reached…` | Live key, business `PENDING`, trial used up. |
+| `404` | `Merchant business not found` | (Service-to-service path) unknown `merchantId`. |
+| `500` | `Failed to create checkout session` / `Internal server error` | Server-side failure — retry with the same `idempotencyKey`. |
+
+## Webhook signature (for when checkout webhooks ship)
+
+| Item | Value |
+| --- | --- |
+| Header | `X-Webhook-Signature: t=<timestamp>,v1=<sig>` |
+| Algorithm | HMAC-SHA256 |
+| Signed string | `"{timestamp}.{rawBody}"` |
+| Secret | `whsec_…` (shown once at registration) |
+| Register | `POST /api/v1/webhooks` `{ url, events }` |
+
+<Warning>
+Checkout-completion webhooks are **not delivered today** — see
+[Chapter 11](/guide/webhooks). Do not depend on them for fulfilment.
+</Warning>
+
+## Currency
+
+Peeap settles in **SLE (New Leone)**, redenominated in 2022 (three zeros removed).
+`amount: 50` = 50 New Leone. Amounts above 100,000 SLE are flagged as likely
+old-Leone mistakes.

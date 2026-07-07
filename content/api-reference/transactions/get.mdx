@@ -1,0 +1,138 @@
+---
+title: Get Transaction
+api: GET /transactions/{transactionId}
+description: "Get transaction details"
+---
+
+# Get Transaction
+
+Retrieve details for a specific transaction.
+
+## Endpoint
+
+```
+GET /transactions/{transactionId}
+```
+
+## Path Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `transactionId` | string | Yes | The transaction ID |
+
+## Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes | Bearer access token |
+
+## Example Request
+
+```bash
+curl https://api.paymentsystem.com/v1/transactions/txn_abc123 \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+## Response
+
+### Success (200 OK)
+
+```json
+{
+  "id": "txn_abc123",
+  "externalId": "txn_1234567890",
+  "type": "PURCHASE",
+  "status": "CAPTURED",
+  "amount": 99.99,
+  "currency": "USD",
+  "cardId": "crd_xyz789",
+  "walletId": "wal_def456",
+  "merchant": {
+    "id": "mch_123",
+    "name": "Example Store",
+    "category": "5411",
+    "categoryName": "Grocery Stores",
+    "city": "New York",
+    "state": "NY",
+    "country": "US",
+    "postalCode": "10001"
+  },
+  "authorizationCode": "AUTH123",
+  "responseCode": "00",
+  "responseMessage": "Approved",
+  "fees": {
+    "interchange": 1.50,
+    "processing": 0.25
+  },
+  "originalAmount": 99.99,
+  "billingAmount": 99.99,
+  "billingCurrency": "USD",
+  "exchangeRate": 1.0,
+  "metadata": {
+    "orderId": "ORD-12345"
+  },
+  "timeline": [
+    {
+      "status": "PENDING",
+      "timestamp": "2024-01-15T10:30:00Z"
+    },
+    {
+      "status": "AUTHORIZED",
+      "timestamp": "2024-01-15T10:30:01Z"
+    },
+    {
+      "status": "CAPTURED",
+      "timestamp": "2024-01-15T10:30:02Z"
+    },
+    {
+      "status": "SETTLED",
+      "timestamp": "2024-01-16T02:00:00Z"
+    }
+  ],
+  "createdAt": "2024-01-15T10:30:00Z",
+  "updatedAt": "2024-01-16T02:00:00Z",
+  "settledAt": "2024-01-16T02:00:00Z"
+}
+```
+
+### Errors
+
+| Status | Code | Description |
+|--------|------|-------------|
+| 401 | `UNAUTHORIZED` | Invalid or missing access token |
+| 403 | `FORBIDDEN` | Transaction belongs to another user |
+| 404 | `NOT_FOUND` | Transaction does not exist |
+
+```json
+{
+  "statusCode": 404,
+  "message": "Transaction not found",
+  "error": "NOT_FOUND"
+}
+```
+
+## Response Fields
+
+### Merchant Object
+
+| Field | Description |
+|-------|-------------|
+| `id` | Merchant identifier |
+| `name` | Merchant name |
+| `category` | MCC (Merchant Category Code) |
+| `categoryName` | Human-readable category name |
+| `city` | Merchant city |
+| `country` | Merchant country (ISO 3166-1 alpha-2) |
+
+### Timeline Object
+
+| Field | Description |
+|-------|-------------|
+| `status` | Transaction status at this point |
+| `timestamp` | When this status was reached |
+
+## Notes
+
+- Transaction details include full merchant information
+- Timeline shows the complete status history
+- For cross-currency transactions, check `exchangeRate` and `billingAmount`

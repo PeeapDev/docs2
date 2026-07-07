@@ -1,0 +1,97 @@
+---
+title: Submit Your App
+description: "How to package, test, and submit your plugin app for review"
+---
+
+# Submit Your App
+
+Once you've built and tested your app in the playground, follow these steps to get it published on the Peeap App Store.
+
+## Step 1: Prepare Your Bundle
+
+Create a zip file with this structure:
+
+```
+my-app.zip
+├── peeap-manifest.json    # Required — see Manifest Spec
+├── index.js               # Your ESM entry point
+├── icon.svg               # App icon (recommended: 512x512)
+└── ... other assets
+```
+
+<Warning>
+  Your `index.js` must be an **ES Module** with a `default export` of a React component.
+  Do NOT use `module.exports` or CommonJS syntax.
+</Warning>
+
+## Step 2: Set Up Your Backend (Optional)
+
+If your app needs its own database:
+
+1. Create a free Supabase project at [supabase.com](https://supabase.com)
+2. Set up your tables and RLS policies
+3. Note your **Project URL** and **anon key** — you'll need these during submission
+
+```
+Project URL:  https://yourproject.supabase.co
+Anon Key:     eyJhbGciOiJI...
+```
+
+<Info>
+  Your Supabase credentials are encrypted and stored securely. They are never exposed to other apps or users.
+  Each plugin gets a completely isolated database — like WeChat mini-programs.
+</Info>
+
+## Step 3: Submit via Developer Portal
+
+1. Go to the **Developer Portal** in your Peeap dashboard (`/developer/apps`)
+2. Click **New App**
+3. Fill in the details:
+   - **App name** and **slug** (URL-safe identifier)
+   - **Category** (finance, productivity, social, utilities, etc.)
+   - **Short description** (shown in App Store listings)
+   - **Full description** (shown on the app detail page)
+4. If your app has its own backend, enter your Supabase credentials
+5. Upload your zip bundle
+6. Click **Submit for Review**
+
+## Step 4: Review Process
+
+Our team reviews every submission:
+
+| Check | What We Look For |
+|-------|-----------------|
+| **Security** | No malicious code, no data exfiltration, no unauthorized API calls |
+| **Permissions** | App only requests permissions it actually uses |
+| **Quality** | App works correctly, handles errors gracefully |
+| **UX** | App follows platform design patterns, doesn't break the host UI |
+| **Performance** | App loads quickly, doesn't block the main thread |
+
+Review typically takes **24-48 hours**.
+
+### Possible Outcomes
+
+- **Approved** — Your app is published to the App Store
+- **Rejected** — You'll see the reason and can fix and resubmit
+
+## Step 5: Post-Publication
+
+Once published:
+
+- Users can find and install your app from the **App Store**
+- You can view install counts and ratings in the Developer Portal
+- Push updates by uploading new versions (each version goes through review)
+- Admin-activated permissions (like `platform:query`) require separate admin approval
+
+## Version Management
+
+To update your published app:
+
+1. Go to Developer Portal → Your App → Versions
+2. Upload a new bundle with an incremented version in the manifest
+3. Submit the new version for review
+4. Once approved, it automatically becomes the current version
+
+<Tip>
+  Use semantic versioning: `1.0.0` → `1.0.1` for fixes, `1.1.0` for features, `2.0.0` for breaking changes.
+</Tip>

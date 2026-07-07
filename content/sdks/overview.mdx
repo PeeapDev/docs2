@@ -1,0 +1,106 @@
+---
+title: SDK Overview
+description: "Official SDKs for Payment System"
+---
+
+# SDK Overview
+
+Payment System provides official SDKs for popular programming languages to simplify integration.
+
+## Available SDKs
+
+<CardGroup cols={2}>
+  <Card title="JavaScript/TypeScript" icon="js" href="/sdks/javascript">
+    For Node.js and browser applications
+  </Card>
+  <Card title="Python" icon="python" href="/sdks/python">
+    For Python applications and scripts
+  </Card>
+</CardGroup>
+
+## Features
+
+All SDKs provide:
+
+- **Type safety**: Full TypeScript/type definitions
+- **Authentication**: Automatic token management and refresh
+- **Error handling**: Structured error responses
+- **Retries**: Automatic retry with exponential backoff
+- **Logging**: Configurable request/response logging
+
+## Quick Comparison
+
+| Feature | JavaScript | Python |
+|---------|------------|--------|
+| Package Manager | npm/yarn | pip |
+| Min Version | Node 18+ | Python 3.8+ |
+| TypeScript | Native | Type hints |
+| Async Support | Promise/async-await | asyncio |
+
+## Common Patterns
+
+### Authentication
+
+All SDKs handle authentication automatically:
+
+```javascript
+// JavaScript
+const client = new PaymentSystem({
+  accessToken: 'your-access-token',
+  refreshToken: 'your-refresh-token'
+});
+// Token refresh is handled automatically
+```
+
+```python
+# Python
+client = PaymentSystem(
+    access_token='your-access-token',
+    refresh_token='your-refresh-token'
+)
+# Token refresh is handled automatically
+```
+
+### Error Handling
+
+```javascript
+// JavaScript
+try {
+  const wallet = await client.wallets.create({ currencyCode: 'USD' });
+} catch (error) {
+  if (error instanceof PaymentSystemError) {
+    console.error(error.code, error.message);
+  }
+}
+```
+
+```python
+# Python
+try:
+    wallet = client.wallets.create(currency_code='USD')
+except PaymentSystemError as error:
+    print(error.code, error.message)
+```
+
+## Installation
+
+<CodeGroup>
+```bash npm
+npm install @paymentsystem/sdk
+```
+
+```bash yarn
+yarn add @paymentsystem/sdk
+```
+
+```bash pip
+pip install paymentsystem
+```
+</CodeGroup>
+
+## Getting Help
+
+- [JavaScript SDK Reference](/sdks/javascript)
+- [Python SDK Reference](/sdks/python)
+- [API Reference](/api-reference/introduction)
+- [GitHub Issues](https://github.com/paymentsystem/sdk/issues)

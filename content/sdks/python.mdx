@@ -1,0 +1,253 @@
+---
+title: Python SDK
+description: "Payment System SDK for Python"
+---
+
+# Python SDK
+
+The official Python SDK for Payment System.
+
+## Installation
+
+```bash
+pip install paymentsystem
+```
+
+## Requirements
+
+- Python 3.8+
+- `requests` or `httpx` for HTTP requests
+- `pydantic` for data validation
+
+## Quick Start
+
+```python
+from paymentsystem import PaymentSystem
+
+# Initialize the client
+client = PaymentSystem(
+    base_url='https://api.paymentsystem.com/v1',
+    access_token='your-access-token',
+    refresh_token='your-refresh-token'
+)
+
+# Create a wallet
+wallet = client.wallets.create(currency_code='USD')
+print(wallet.id)  # wal_abc123
+```
+
+## Configuration
+
+```python
+client = PaymentSystem(
+    # Required
+    base_url='https://api.paymentsystem.com/v1',
+
+    # Authentication (at least one required)
+    access_token='your-access-token',
+    refresh_token='your-refresh-token',
+
+    # Optional
+    timeout=30,              # Request timeout in seconds
+    retries=3,               # Number of retries
+    retry_delay=1.0,         # Base retry delay in seconds
+    on_token_refresh=save_tokens  # Callback when tokens refresh
+)
+```
+
+## Authentication
+
+### Login
+
+```python
+result = client.auth.login(
+    email='user@example.com',
+    password='SecurePass123!'
+)
+
+user = result.user
+tokens = result.tokens
+
+# Store tokens for future use
+save_tokens(tokens.access_token, tokens.refresh_token)
+```
+
+### Register
+
+```python
+result = client.auth.register(
+    email='user@example.com',
+    password='SecurePass123!',
+    first_name='John',
+    last_name='Doe'
+)
+```
+
+### Token Refresh
+
+Tokens are refreshed automatically when they expire. You can also manually refresh:
+
+```python
+new_tokens = client.auth.refresh()
+```
+
+## Wallets
+
+### Create Wallet
+
+```python
+wallet = client.wallets.create(currency_code='USD')
+```
+
+### List Wallets
+
+```python
+result = client.wallets.list(
+    page=1,
+    limit=20,
+    status='ACTIVE'
+)
+
+for wallet in result.data:
+    print(f'{wallet.id}: {wallet.available_balance} {wallet.currency_code}')
+```
+
+### Get Wallet
+
+```python
+wallet = client.wallets.get('wal_abc123')
+print(wallet.available_balance)
+```
+
+### Transfer Funds
+
+```python
+transfer = client.wallets.transfer(
+    wallet_id='wal_abc123',
+    destination_wallet_id='wal_def456',
+    amount=50.00,
+    description='Payment for services'
+)
+```
+
+## Cards
+
+### Issue Card
+
+```python
+card = client.cards.create(
+    wallet_id='wal_abc123',
+    type='VIRTUAL',
+    label='Shopping Card'
+)
+```
+
+### List Cards
+
+```python
+result = client.cards.list(
+    wallet_id='wal_abc123',
+    status='ACTIVE'
+)
+```
+
+### Activate Card
+
+```python
+client.cards.activate(
+    card_id='crd_abc123',
+    activation_code='1234'  # For physical cards
+)
+```
+
+### Block Card
+
+```python
+client.cards.block(
+    card_id='crd_abc123',
+    reason='LOST'
+)
+```
+
+## Transactions
+
+### List Transactions
+
+```python
+result = client.transactions.list(
+    wallet_id='wal_abc123',
+    type='PURCHASE',
+    start_date='2024-01-01',
+    end_date='2024-01-31'
+)
+
+for txn in result.data:
+    print(f'{txn.id}: {txn.amount} {txn.currency}')
+```
+
+### Get Transaction
+
+```python
+transaction = client.transactions.get('txn_abc123')
+```
+
+### Refund Transaction
+
+```python
+refund = client.transactions.refund(
+    transaction_id='txn_abc123',
+    amount=25.00,
+    reason='Partial return'
+)
+```
+
+## Error Handling
+
+```python
+from paymentsystem import PaymentSystemError, ErrorCode
+
+try:
+    client.wallets.transfer(
+        wallet_id='wal_abc123',
+        destination_wallet_id='wal_def456',
+        amount=1000.00
+    )
+except PaymentSystemError as error:
+    if error.code == ErrorCode.INSUFFICIENT_FUNDS:
+        print('Not enough balance')
+    elif error.code == ErrorCode.LIMIT_EXCEEDED:
+        print('Transaction limit exceeded')
+    else:
+        print(error.message)
+```
+
+## Async Support
+
+The SDK also supports async/await with `httpx`:
+
+```python
+import asyncio
+from paymentsystem import AsyncPaymentSystem
+
+async def main():
+    client = AsyncPaymentSystem(
+        base_url='https://api.paymentsystem.com/v1',
+        access_token='your-access-token'
+    )
+
+    wallet = await client.wallets.create(currency_code='USD')
+    print(wallet.id)
+
+asyncio.run(main())
+```
+
+## Type Hints
+
+The SDK includes full type hints for IDE support:
+
+```python
+from paymentsystem.types import Wallet, Card, Transaction
+
+wallet: Wallet = client.wallets.get('wal_abc123')
+balance: float = wallet.available_balance
+```

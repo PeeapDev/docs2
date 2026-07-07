@@ -1,0 +1,102 @@
+---
+title: Block Card
+api: POST /cards/{cardId}/block
+description: "Temporarily block a card"
+---
+
+# Block Card
+
+Temporarily block a card to prevent transactions.
+
+## Endpoint
+
+```
+POST /cards/{cardId}/block
+```
+
+## Path Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `cardId` | string | Yes | The card ID |
+
+## Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes | Bearer access token |
+| `Content-Type` | Yes | application/json |
+
+## Request Body
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `reason` | string | Yes | Reason for blocking |
+
+### Common Reasons
+
+| Reason | Description |
+|--------|-------------|
+| `LOST` | Card was lost |
+| `STOLEN` | Card was stolen |
+| `FRAUD` | Suspicious activity detected |
+| `USER_REQUEST` | User requested block |
+| `OTHER` | Other reason |
+
+## Example Request
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/cards/crd_abc123/block \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "reason": "LOST"
+  }'
+```
+
+## Response
+
+### Success (200 OK)
+
+```json
+{
+  "id": "crd_abc123",
+  "status": "BLOCKED",
+  "blockedAt": "2024-01-15T10:30:00Z",
+  "blockReason": "LOST",
+  "message": "Card blocked successfully"
+}
+```
+
+### Errors
+
+| Status | Code | Description |
+|--------|------|-------------|
+| 400 | `ALREADY_BLOCKED` | Card is already blocked |
+| 400 | `INVALID_STATUS` | Card cannot be blocked (cancelled/expired) |
+| 401 | `UNAUTHORIZED` | Invalid or missing access token |
+| 403 | `FORBIDDEN` | Card belongs to another user |
+| 404 | `NOT_FOUND` | Card does not exist |
+
+```json
+{
+  "statusCode": 400,
+  "message": "Card is already blocked",
+  "error": "ALREADY_BLOCKED"
+}
+```
+
+## Unblocking
+
+To unblock a card, use the [Unblock Card](/api-reference/cards/unblock) endpoint.
+
+<Warning>
+  If the card was blocked due to `STOLEN` or `FRAUD`, additional verification may be required to unblock.
+</Warning>
+
+## Notes
+
+- Blocked cards cannot process any transactions
+- Pending authorizations are not affected
+- Blocking is immediate and reversible
+- For permanent deactivation, use [Cancel Card](/api-reference/cards/cancel)

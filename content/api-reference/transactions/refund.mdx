@@ -1,0 +1,131 @@
+---
+title: Refund Transaction
+api: POST /transactions/{transactionId}/refund
+description: "Refund a completed transaction"
+---
+
+# Refund Transaction
+
+Initiate a full or partial refund for a captured transaction.
+
+## Endpoint
+
+```
+POST /transactions/{transactionId}/refund
+```
+
+## Path Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `transactionId` | string | Yes | The transaction ID to refund |
+
+## Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes | Bearer access token |
+| `Content-Type` | Yes | application/json |
+| `Idempotency-Key` | Recommended | Unique key to prevent duplicates |
+
+## Request Body
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `amount` | number | No | Amount to refund (defaults to full amount) |
+| `reason` | string | Yes | Reason for the refund |
+
+## Example Request
+
+### Full Refund
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/transactions/txn_abc123/refund \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: refund-123456" \
+  -d '{
+    "reason": "Customer request"
+  }'
+```
+
+### Partial Refund
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/transactions/txn_abc123/refund \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: refund-789012" \
+  -d '{
+    "amount": 25.00,
+    "reason": "Partial return"
+  }'
+```
+
+## Response
+
+### Success (200 OK)
+
+```json
+{
+  "id": "txn_refund_xyz",
+  "originalTransactionId": "txn_abc123",
+  "type": "REFUND",
+  "status": "PENDING",
+  "amount": 25.00,
+  "currency": "USD",
+  "reason": "Partial return",
+  "walletId": "wal_def456",
+  "createdAt": "2024-01-15T10:30:00Z"
+}
+```
+
+### Errors
+
+| Status | Code | Description |
+|--------|------|-------------|
+| 400 | `INVALID_AMOUNT` | Refund amount exceeds available |
+| 400 | `INVALID_STATUS` | Transaction cannot be refunded |
+| 401 | `UNAUTHORIZED` | Invalid or missing access token |
+| 403 | `FORBIDDEN` | Transaction belongs to another user |
+| 404 | `NOT_FOUND` | Transaction does not exist |
+| 422 | `ALREADY_REFUNDED` | Transaction already fully refunded |
+
+```json
+{
+  "statusCode": 400,
+  "message": "Refund amount exceeds available amount",
+  "error": "INVALID_AMOUNT",
+  "details": {
+    "originalAmount": 99.99,
+    "refundedAmount": 50.00,
+    "availableForRefund": 49.99,
+    "requestedAmount": 75.00
+  }
+}
+```
+
+## Refund Rules
+
+- Only `CAPTURED` or `SETTLED` transactions can be refunded
+- Refund amount cannot exceed original transaction amount
+- Multiple partial refunds are allowed up to the original amount
+- Refunds are processed back to the original payment method
+
+## Timeline
+
+| Status | Description |
+|--------|-------------|
+| `PENDING` | Refund initiated |
+| `COMPLETED` | Refund processed successfully |
+| `FAILED` | Refund could not be processed |
+
+<Info>
+  Refunds typically take 3-5 business days to appear on the cardholder's statement.
+</Info>
+
+## Notes
+
+- Refunds credit the user's wallet balance immediately
+- Settlement to the original payment method may take additional time
+- Keep track of total refunds per transaction to avoid over-refunding

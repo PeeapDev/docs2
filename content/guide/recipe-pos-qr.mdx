@@ -1,0 +1,130 @@
+---
+title: "Recipe · POS / QR scan-to-pay"
+description: "Show a QR at the counter; the customer scans it with the Peeap app and pays wallet-to-wallet."
+---
+
+# Recipe · POS / QR scan-to-pay
+
+At a counter or on a device, you display a QR code. A customer with the Peeap app
+scans it and pays **wallet-to-wallet** — their Peeap balance to yours, instantly,
+no mobile-money round-trip. This is the fastest settlement Peeap offers.
+
+## What you implement vs. what the app does
+
+This recipe has a neat division of labour:
+
+| You (the merchant/POS) | The Peeap app (the customer) |
+| --- | --- |
+| Create a session, render its link as a QR, then **poll for completion**. | Scans the QR, authorises with PIN, and pays. |
+
+You **do not** implement the payment itself — the customer's Peeap app handles
+scanning, PIN entry, KYC/tier checks, and the wallet transfer. Your job is just
+"ask for an amount, show a QR, wait for `COMPLETE`."
+
+## 1. Create the session
+
+Use the same authenticated create call as the storefront recipe — your `pk_…` key
+identifies the business that will receive the funds:
+
+```javascript
+const r = await fetch("https://api.peeap.com/api/checkout/create", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    publicKey: process.env.PEEAP_PUBLIC_KEY,
+    amount: 75,
+    currency: "SLE",
+    description: "Counter sale",
+    reference: "POS-2026-0001",
+    metadata: { terminal_label: "POS-001", shift_id: "shift_42" },
+  }),
+});
+const session = await r.json();
+// session.paymentUrl → encode THIS as a QR
+// session.sessionId  → poll THIS for completion
+```
+
+<Note>
+**Why `/checkout/create` here too?** It authenticates with your public key and sets
+the receiving business automatically, keeping POS consistent with your other
+integrations. (A lower-level `POST /api/checkout/sessions` exists that takes a raw
+`merchantId` and is what Peeap's own first-party apps use — prefer the
+public-key path for your own integrations.)
+</Note>
+
+## 2. Render the QR
+
+Encode `session.paymentUrl` as a QR code on your POS screen. Any QR library works —
+the QR's content is simply that URL:
+
+```javascript
+import QRCode from "qrcode";
+const dataUrl = await QRCode.toDataURL(session.paymentUrl);
+// <img src={dataUrl} /> on the POS screen
+```
+
+The customer opens their Peeap app, scans, sees your **business name** and the
+amount, enters their PIN, and confirms.
+
+<Tip>
+**Advanced — what happens on scan.** The Peeap app calls
+`POST /api/checkout/sessions/{id}/scan-pay` with the payer's user id, wallet, and
+PIN. Peeap then, atomically: rate-limits the attempt, validates the PIN, checks the
+payer's KYC tier can *send* and your business can *receive* the amount, moves the
+funds via the ledger (idempotency key `scan-pay-{sessionId}`), and marks the
+session `COMPLETE`. You never call this endpoint — but knowing the gates helps you
+explain a declined payment ("insufficient balance," "PIN required," "tier limit").
+</Tip>
+
+## 3. Poll for completion
+
+Exactly like every other recipe — your source of truth is the session status:
+
+```javascript
+async function waitAtCounter(sessionId, { tries = 60, delayMs = 2000 } = {}) {
+  for (let i = 0; i < tries; i++) {
+    const s = await getSessionSafe(sessionId); // GET /api/checkout/sessions/{id}
+    if (s.status === "COMPLETE") return "PAID";
+    if (s.status === "EXPIRED") return "EXPIRED";
+    await new Promise((res) => setTimeout(res, delayMs));
+  }
+  return "TIMEOUT";
+}
+```
+
+When it returns `PAID`, show a success screen and print the receipt. Because the
+money moved wallet-to-wallet, it's already in your business wallet — there's no
+settlement lag to wait out.
+
+<Warning>
+Even at a counter, confirm on the **session status**, not on the customer showing
+you their phone's "sent" screen. A screenshot isn't proof. Two seconds of polling
+gives you the real answer.
+</Warning>
+
+## The complete POS loop
+
+<Steps>
+  <Step title="Cashier enters amount">
+    Your POS calls `POST /api/checkout/create` → gets `paymentUrl` + `sessionId`.
+  </Step>
+  <Step title="Screen shows the QR">
+    Encode `paymentUrl` as a QR. The customer scans it with the Peeap app.
+  </Step>
+  <Step title="Customer pays in-app">
+    They confirm with their PIN; Peeap moves the funds and completes the session.
+  </Step>
+  <Step title="POS confirms and prints">
+    Poll `GET /api/checkout/sessions/{id}`; on `COMPLETE`, print the receipt.
+  </Step>
+</Steps>
+
+## Hardware terminals
+
+If you're integrating a physical device (e.g. a HEMI scan-to-pay speaker), pass
+the device serial in metadata (`device_sn`) when creating the session — Peeap will
+announce the successful payment through the device automatically on completion.
+Everything else in this recipe is unchanged.
+
+That completes the four recipes. Each is the same spine — create, pay, confirm by
+polling, fulfil idempotently — adapted to a different surface.

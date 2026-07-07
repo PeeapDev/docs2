@@ -1,0 +1,182 @@
+---
+title: 'Products API'
+description: 'Manage products available to your students from approved vendors'
+api: 'GET /api/schools/{schoolId}/products'
+---
+
+# Products API
+
+View and control products from your approved vendors. Block inappropriate items from appearing in your school shop.
+
+## List Products
+
+Get all products from approved vendors. Use this endpoint to display products in your school's shop.
+
+```bash
+GET /api/schools/{schoolId}/products
+```
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `blocked` | boolean | Filter: `true` for blocked, `false` for visible |
+| `vendorId` | string | Filter by vendor |
+| `category` | string | Filter by category |
+| `search` | string | Search by product name |
+| `page` | integer | Page number |
+| `limit` | integer | Items per page |
+
+<CodeGroup>
+```bash Get Visible Products (for shop)
+curl -X GET "https://api.peeap.com/v1/schools/{schoolId}/products?blocked=false" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```bash Get All Products (for admin)
+curl -X GET "https://api.peeap.com/v1/schools/{schoolId}/products" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</CodeGroup>
+
+### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "products": [
+      {
+        "id": "prod_001",
+        "name": "Mathematics Textbook Grade 10",
+        "description": "Official curriculum textbook",
+        "category": "Books & Stationery",
+        "price": 50000,
+        "discountPrice": 45000,
+        "currency": "SLE",
+        "stock": 50,
+        "vendorId": "vendor_001",
+        "vendorName": "Student Bookshop",
+        "vendorUsername": "bookshop_edu",
+        "image": "https://cdn.peeap.com/products/textbook.jpg",
+        "isBlocked": false,
+        "blockedAt": null,
+        "blockedReason": null
+      },
+      {
+        "id": "prod_002",
+        "name": "Energy Drink",
+        "description": "High caffeine drink",
+        "category": "Food & Beverages",
+        "price": 5000,
+        "currency": "SLE",
+        "stock": 100,
+        "vendorId": "vendor_002",
+        "vendorName": "Campus Canteen",
+        "image": null,
+        "isBlocked": true,
+        "blockedAt": "2024-01-18T10:00:00Z",
+        "blockedReason": "Not appropriate for students"
+      }
+    ],
+    "summary": {
+      "total": 156,
+      "visible": 152,
+      "blocked": 4
+    },
+    "pagination": {
+      "page": 1,
+      "limit": 50,
+      "total": 156
+    }
+  }
+}
+```
+
+## Block Product
+
+Hide a product from your school's shop.
+
+```bash
+POST /api/schools/{schoolId}/products/{productId}/block
+```
+
+### Request Body
+
+```json
+{
+  "reason": "Not appropriate for students"
+}
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "productId": "prod_002",
+    "isBlocked": true,
+    "blockedAt": "2024-01-18T10:00:00Z",
+    "blockedReason": "Not appropriate for students",
+    "message": "Product blocked from school shop"
+  }
+}
+```
+
+## Unblock Product
+
+Make a product visible again.
+
+```bash
+POST /api/schools/{schoolId}/products/{productId}/unblock
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "productId": "prod_002",
+    "isBlocked": false,
+    "unblockedAt": "2024-01-20T10:00:00Z",
+    "message": "Product unblocked"
+  }
+}
+```
+
+## Bulk Block/Unblock
+
+Block or unblock multiple products at once.
+
+```bash
+POST /api/schools/{schoolId}/products/bulk-update
+```
+
+### Request Body
+
+```json
+{
+  "action": "block",
+  "productIds": ["prod_001", "prod_002", "prod_003"],
+  "reason": "Vendor suspended"
+}
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "updated": 3,
+    "failed": 0,
+    "message": "3 products blocked"
+  }
+}
+```
+
+<Tip>
+Use `blocked=false` when fetching products for your school shop to only show approved items.
+</Tip>

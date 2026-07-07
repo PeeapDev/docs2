@@ -1,0 +1,149 @@
+---
+title: "Recipe · In-app wallet top-up"
+description: "Let a user add money to their Peeap wallet from mobile money, inside your app."
+---
+
+# Recipe · In-app wallet top-up
+
+This recipe is different from the others: instead of a customer paying *you*, a
+user is funding *their own* Peeap wallet from mobile money. It's the on-ramp that
+makes wallet-to-wallet payments (like the [POS recipe](/guide/recipe-pos-qr))
+possible. The flow is **USSD-based**: the user dials a code on their phone to
+approve the deposit.
+
+## The endpoint
+
+```http
+POST https://api.peeap.com/api/monime/deposit
+Content-Type: application/json
+```
+
+## 1. Start the deposit
+
+```json
+{
+  "walletId": "wlt_8a21...",
+  "amount": 100,
+  "currency": "SLE",
+  "method": "ussd",
+  "description": "Wallet top-up"
+}
+```
+
+The response gives the user a **USSD code to dial**:
+
+```json
+{
+  "paymentCodeId": "pc_5b9d...",
+  "ussdCode": "*130*7*123456#",
+  "amount": 100,
+  "currency": "SLE",
+  "status": "pending",
+  "expiresAt": "2026-06-26T15:45:00.000Z"
+}
+```
+
+Show the user `ussdCode` and tell them to dial it on the phone with their
+mobile-money line. They'll get a prompt to confirm the payment.
+
+<Note>
+The full amount the user enters is **credited to their wallet** — Monime's fee is
+recorded but not deducted from the credit. Show the user the amount they'll
+receive (`amount`), which is what lands in their balance.
+</Note>
+
+## 2. Poll for completion
+
+While the user dials and confirms, poll the payment code every ~3 seconds:
+
+```http
+GET https://api.peeap.com/api/monime/payment-code/{paymentCodeId}
+```
+
+```javascript
+async function waitForTopup(paymentCodeId, { tries = 40, delayMs = 3000 } = {}) {
+  for (let i = 0; i < tries; i++) {
+    const r = await fetch(
+      `https://api.peeap.com/api/monime/payment-code/${paymentCodeId}`
+    );
+    const s = await r.json();
+
+    if (s.status === "completed") return s;          // ✅ wallet credited
+    if (s.status === "held_pending_kyc") return s;    // ⚠️ over the user's KYC limit
+    await new Promise((res) => setTimeout(res, delayMs));
+  }
+  return null; // still pending — let the user retry or check later
+}
+```
+
+When `status` is `completed`, Peeap has **already credited the wallet
+atomically** — you don't make a separate "credit" call. The credit is idempotent
+on Peeap's side (keyed to the payment code), so polling more than once can't
+double-credit.
+
+## 3. Handle the KYC ceiling
+
+A deposit that would push the user past their KYC tier limit comes back as
+`held_pending_kyc` rather than `completed`:
+
+```json
+{
+  "paymentCodeId": "pc_5b9d...",
+  "status": "held_pending_kyc",
+  "amount": 100,
+  "tier_limit": 5000,
+  "kyc_required": true
+}
+```
+
+Surface this to the user as "you've reached your wallet limit — verify your
+identity to add more," and point them at the in-app KYC upgrade. Don't treat it as
+a failure or a success — it's a hold.
+
+<Warning>
+`pending` ≠ `failed`. A pending code just means the user hasn't finished dialling.
+Keep it pending until it `completed`s or `expiresAt` passes — never assume a deposit
+failed just because the first few polls were `pending`.
+</Warning>
+
+## Alternative: redirect-based deposit
+
+If you'd rather hand the user a hosted Monime page than a USSD code, omit `method`
+(or send `"checkout"`):
+
+```json
+{ "walletId": "wlt_8a21...", "amount": 100, "currency": "SLE" }
+```
+
+```json
+{
+  "paymentUrl": "https://...monime checkout...",
+  "monimeSessionId": "...",
+  "amount": 100,
+  "currency": "SLE"
+}
+```
+
+Redirect the user to `paymentUrl`; afterwards Monime returns them to Peeap's
+`/api/deposit/success` handler, which credits the wallet. USSD is usually the
+better fit for Sierra Leone — no smartphone or data needed.
+
+## Recap
+
+<Steps>
+  <Step title="Create the deposit">
+    `POST /api/monime/deposit` with `method: "ussd"` → get a `ussdCode`.
+  </Step>
+  <Step title="User dials the code">
+    They confirm on their phone via mobile money.
+  </Step>
+  <Step title="Poll until completed">
+    `GET /api/monime/payment-code/{id}` — Peeap credits the wallet on `completed`.
+  </Step>
+  <Step title="Mind the KYC ceiling">
+    Handle `held_pending_kyc` by prompting an identity upgrade.
+  </Step>
+</Steps>
+
+Once a user has a funded wallet, they can pay merchants instantly wallet-to-wallet
+— which is exactly the [POS / QR recipe](/guide/recipe-pos-qr).

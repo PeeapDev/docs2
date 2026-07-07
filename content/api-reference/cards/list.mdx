@@ -1,0 +1,97 @@
+---
+title: List Cards
+api: GET /cards
+description: "Get all cards for the authenticated user"
+---
+
+# List Cards
+
+Retrieve all cards belonging to the authenticated user.
+
+## Endpoint
+
+```
+GET /cards
+```
+
+## Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes | Bearer access token |
+
+## Query Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `page` | integer | No | Page number (default: 1) |
+| `limit` | integer | No | Items per page (default: 20, max: 100) |
+| `walletId` | string | No | Filter by wallet ID |
+| `status` | string | No | Filter by status |
+| `type` | string | No | Filter by type (VIRTUAL, PHYSICAL) |
+
+## Example Request
+
+```bash
+curl https://api.paymentsystem.com/v1/cards \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### With Filters
+
+```bash
+curl "https://api.paymentsystem.com/v1/cards?type=VIRTUAL&status=ACTIVE" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+## Response
+
+### Success (200 OK)
+
+```json
+{
+  "data": [
+    {
+      "id": "crd_abc123",
+      "externalId": "crd_1234567890",
+      "walletId": "wal_xyz789",
+      "userId": "usr_def456",
+      "type": "VIRTUAL",
+      "status": "ACTIVE",
+      "lastFour": "4242",
+      "expiryMonth": 12,
+      "expiryYear": 2027,
+      "brand": "VISA",
+      "label": "Shopping Card",
+      "spendingLimits": {
+        "daily": 1000.00,
+        "monthly": 10000.00,
+        "perTransaction": 500.00
+      },
+      "createdAt": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "limit": 20,
+    "total": 1,
+    "totalPages": 1
+  }
+}
+```
+
+### Errors
+
+| Status | Code | Description |
+|--------|------|-------------|
+| 401 | `UNAUTHORIZED` | Invalid or missing access token |
+
+## Card Statuses
+
+| Status | Description |
+|--------|-------------|
+| `PENDING_ACTIVATION` | Card created but not yet activated |
+| `ACTIVE` | Card can be used for transactions |
+| `BLOCKED` | Temporarily disabled |
+| `EXPIRED` | Card has passed expiry date |
+| `CANCELLED` | Permanently cancelled |

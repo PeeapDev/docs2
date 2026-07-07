@@ -1,0 +1,93 @@
+---
+title: Create Wallet
+api: POST /wallets
+description: "Create a new wallet"
+---
+
+# Create Wallet
+
+Create a new wallet for the authenticated user.
+
+## Endpoint
+
+```
+POST /wallets
+```
+
+## Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes | Bearer access token |
+| `Content-Type` | Yes | application/json |
+
+## Request Body
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `currencyCode` | string | Yes | ISO 4217 currency code (USD, EUR, GBP, etc.) |
+
+## Example Request
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/wallets \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "currencyCode": "USD"
+  }'
+```
+
+## Response
+
+### Success (201 Created)
+
+```json
+{
+  "id": "wal_abc123",
+  "externalId": "wal_1234567890",
+  "ownerId": "usr_xyz789",
+  "ownerType": "USER",
+  "currencyCode": "USD",
+  "availableBalance": 0,
+  "heldBalance": 0,
+  "status": "ACTIVE",
+  "dailyLimit": 5000.00,
+  "monthlyLimit": 50000.00,
+  "createdAt": "2024-01-15T10:30:00Z"
+}
+```
+
+### Errors
+
+| Status | Code | Description |
+|--------|------|-------------|
+| 400 | `INVALID_CURRENCY` | Currency code is not supported |
+| 401 | `UNAUTHORIZED` | Invalid or missing access token |
+| 409 | `WALLET_EXISTS` | Wallet already exists for this currency |
+
+```json
+{
+  "statusCode": 409,
+  "message": "Wallet already exists for USD",
+  "error": "WALLET_EXISTS"
+}
+```
+
+## Supported Currencies
+
+| Code | Currency |
+|------|----------|
+| `USD` | US Dollar |
+| `EUR` | Euro |
+| `GBP` | British Pound |
+
+<Info>
+  Additional currencies may be available depending on your account configuration and region.
+</Info>
+
+## Notes
+
+- Users start with default limits based on their KYC tier
+- Only one wallet per currency is allowed per user
+- New wallets have zero balance and are immediately active

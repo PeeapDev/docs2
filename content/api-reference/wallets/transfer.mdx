@@ -1,0 +1,114 @@
+---
+title: Transfer Funds
+api: POST /wallets/{walletId}/transfer
+description: "Transfer funds between wallets"
+---
+
+# Transfer Funds
+
+Transfer funds from one wallet to another (P2P transfer).
+
+## Endpoint
+
+```
+POST /wallets/{walletId}/transfer
+```
+
+## Path Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `walletId` | string | Yes | Source wallet ID |
+
+## Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes | Bearer access token |
+| `Content-Type` | Yes | application/json |
+| `Idempotency-Key` | Recommended | Unique key to prevent duplicates |
+
+## Request Body
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `destinationWalletId` | string | Yes | Target wallet ID |
+| `amount` | number | Yes | Amount to transfer (positive number) |
+| `description` | string | No | Transfer description |
+
+## Example Request
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/wallets/wal_abc123/transfer \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: transfer-123456" \
+  -d '{
+    "destinationWalletId": "wal_def456",
+    "amount": 50.00,
+    "description": "Payment for services"
+  }'
+```
+
+## Response
+
+### Success (200 OK)
+
+```json
+{
+  "transactionId": "txn_xyz789",
+  "sourceWallet": {
+    "id": "wal_abc123",
+    "previousBalance": 1000.00,
+    "newBalance": 950.00
+  },
+  "destinationWallet": {
+    "id": "wal_def456"
+  },
+  "amount": 50.00,
+  "currency": "USD",
+  "description": "Payment for services",
+  "status": "COMPLETED",
+  "createdAt": "2024-01-15T10:30:00Z"
+}
+```
+
+### Errors
+
+| Status | Code | Description |
+|--------|------|-------------|
+| 400 | `INVALID_AMOUNT` | Amount must be positive |
+| 400 | `CURRENCY_MISMATCH` | Wallets have different currencies |
+| 401 | `UNAUTHORIZED` | Invalid or missing access token |
+| 403 | `FORBIDDEN` | Source wallet belongs to another user |
+| 404 | `WALLET_NOT_FOUND` | Source or destination wallet not found |
+| 422 | `INSUFFICIENT_FUNDS` | Not enough balance |
+| 422 | `LIMIT_EXCEEDED` | Daily or monthly limit exceeded |
+| 422 | `WALLET_FROZEN` | Source wallet is frozen |
+
+```json
+{
+  "statusCode": 422,
+  "message": "Insufficient funds",
+  "error": "INSUFFICIENT_FUNDS",
+  "details": {
+    "availableBalance": 25.00,
+    "requestedAmount": 50.00
+  }
+}
+```
+
+## Currency Conversion
+
+<Warning>
+  Cross-currency transfers are not supported directly. Use the currency exchange feature to convert funds first.
+</Warning>
+
+## Limits
+
+Transfers are subject to:
+- Per-transaction limit
+- Daily spending limit
+- Monthly spending limit
+
+These limits are determined by the user's KYC tier.

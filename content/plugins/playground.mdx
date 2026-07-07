@@ -1,0 +1,513 @@
+---
+title: Playground
+description: "Test every SDK endpoint with live code examples — see real responses from the platform"
+---
+
+# SDK Playground
+
+Test each PeeapSDK method with ready-to-run examples. Copy any snippet into your app to get started.
+
+<Info>
+  All examples below use `React.createElement()` for compatibility. In your actual app, you can use JSX.
+</Info>
+
+---
+
+## Get User Profile
+
+Read the current user's profile data.
+
+<CodeGroup>
+
+```javascript Balance Checker
+function MyApp({ sdk }) {
+  const [user, setUser] = React.useState(null);
+  const [wallets, setWallets] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    async function load() {
+      try {
+        const u = await sdk.auth.getCurrentUser();
+        setUser(u);
+        const w = await sdk.wallet.listWallets();
+        setWallets(w);
+      } catch (e) {
+        sdk.notifications.showToast(e.message, 'error');
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  if (loading) return <div>Loading...</div>;
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h2>Hello, {user?.firstName}!</h2>
+      <p>Email: {user?.email}</p>
+      <p>KYC Status: {user?.kycStatus}</p>
+      <h3>Your Wallets</h3>
+      {wallets.map(w => (
+        <div key={w.id} style={{ padding: 10, margin: 5, border: '1px solid #ddd', borderRadius: 8 }}>
+          <strong>{w.currency}</strong>: {w.balance.toFixed(2)} ({w.wallet_type})
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+```json Response
+{
+  "user": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "email": "user@example.com",
+    "firstName": "John",
+    "lastName": "Doe",
+    "phone": "+23276000000",
+    "kycStatus": "approved",
+    "roles": ["user"]
+  },
+  "wallets": [
+    { "id": "uuid", "currency": "SLE", "balance": 15000, "wallet_type": "primary", "status": "ACTIVE" }
+  ]
+}
+```
+
+</CodeGroup>
+
+**Permissions needed:** `user:profile:read`, `wallet:read`
+
+---
+
+## Transaction History
+
+Fetch recent transactions for a wallet.
+
+<CodeGroup>
+
+```javascript Transaction List
+function MyApp({ sdk }) {
+  const [wallets, setWallets] = React.useState([]);
+  const [transactions, setTransactions] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    async function load() {
+      const w = await sdk.wallet.listWallets();
+      setWallets(w);
+      if (w.length > 0) {
+        const txns = await sdk.wallet.getTransactions(w[0].id, 10);
+        setTransactions(txns);
+      }
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  if (loading) return <div>Loading...</div>;
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h2>Recent Transactions</h2>
+      {transactions.length === 0 && <p>No transactions yet</p>}
+      {transactions.map(t => (
+        <div key={t.id} style={{
+          padding: 12, margin: '6px 0', borderRadius: 8,
+          border: '1px solid #e5e7eb',
+          display: 'flex', justifyContent: 'space-between'
+        }}>
+          <div>
+            <strong>{t.type}</strong>
+            <p style={{ fontSize: 13, color: '#6b7280' }}>{t.description || 'No description'}</p>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <strong style={{ color: t.type === 'CREDIT' ? '#10b981' : '#ef4444' }}>
+              {t.currency} {t.amount.toFixed(2)}
+            </strong>
+            <p style={{ fontSize: 11, color: '#9ca3af' }}>{t.status}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+```json Response
+[
+  {
+    "id": "txn-uuid",
+    "type": "TRANSFER",
+    "amount": 500,
+    "currency": "SLE",
+    "status": "COMPLETED",
+    "description": "Payment to vendor",
+    "reference": "TXN-SLE-1709312400-a8f2",
+    "createdAt": "2026-03-01T10:30:00Z"
+  }
+]
+```
+
+</CodeGroup>
+
+**Permissions needed:** `wallet:read`, `wallet:transactions`
+
+---
+
+## Send Payment
+
+Request a payment from the user with a confirmation dialog.
+
+<CodeGroup>
+
+```javascript Payment Form
+function MyApp({ sdk }) {
+  const [amount, setAmount] = React.useState('');
+  const [result, setResult] = React.useState(null);
+
+  async function handlePay() {
+    const res = await sdk.wallet.requestPayment({
+      amount: parseFloat(amount),
+      currency: 'SLE',
+      description: 'Premium feature unlock'
+    });
+    setResult(res);
+    if (res.success) {
+      sdk.notifications.showToast('Payment successful!', 'success');
+    }
+  }
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h2>Payment Demo</h2>
+      <input
+        type="number"
+        value={amount}
+        onChange={e => setAmount(e.target.value)}
+        placeholder="Amount (SLE)"
+        style={{ padding: 8, border: '1px solid #d1d5db', borderRadius: 8, width: 200, marginRight: 8 }}
+      />
+      <button
+        onClick={handlePay}
+        style={{ padding: '8px 16px', background: '#3b82f6', color: 'white', borderRadius: 8, border: 'none' }}
+      >
+        Pay
+      </button>
+      {result && (
+        <pre style={{ marginTop: 12, padding: 12, background: '#f3f4f6', borderRadius: 8 }}>
+          {JSON.stringify(result, null, 2)}
+        </pre>
+      )}
+    </div>
+  );
+}
+```
+
+```json Success Response
+{
+  "success": true,
+  "transactionId": "txn_plugin_1709312400123"
+}
+```
+
+```json Failure Response
+{
+  "success": false,
+  "error": "Insufficient balance"
+}
+```
+
+</CodeGroup>
+
+**Permissions needed:** `wallet:transfer`
+
+---
+
+## Search Contacts
+
+Find users on the platform by name, email, or phone.
+
+<CodeGroup>
+
+```javascript Contact Search
+function MyApp({ sdk }) {
+  const [query, setQuery] = React.useState('');
+  const [results, setResults] = React.useState([]);
+
+  async function search() {
+    if (!query.trim()) return;
+    const users = await sdk.contacts.searchUsers(query, 10);
+    setResults(users);
+  }
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h2>Contact Search</h2>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <input
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="Name, email, or phone..."
+          onKeyDown={e => e.key === 'Enter' && search()}
+          style={{ flex: 1, padding: 8, border: '1px solid #d1d5db', borderRadius: 8 }}
+        />
+        <button
+          onClick={search}
+          style={{ padding: '8px 16px', background: '#3b82f6', color: 'white', borderRadius: 8, border: 'none' }}
+        >
+          Search
+        </button>
+      </div>
+      {results.map(u => (
+        <div key={u.id} style={{ padding: 10, margin: '4px 0', border: '1px solid #e5e7eb', borderRadius: 8 }}>
+          <strong>{u.first_name} {u.last_name}</strong>
+          <span style={{ marginLeft: 12, color: '#6b7280', fontSize: 13 }}>{u.email || u.phone}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+```json Response
+[
+  {
+    "id": "uuid",
+    "email": "john@example.com",
+    "phone": "+23276000000",
+    "first_name": "John",
+    "last_name": "Doe",
+    "profile_picture": null
+  }
+]
+```
+
+</CodeGroup>
+
+**Permissions needed:** `contacts:search`
+
+---
+
+## Notifications
+
+Send real platform notifications and read notification state.
+
+<CodeGroup>
+
+```javascript Notification Center
+function MyApp({ sdk }) {
+  const [notifications, setNotifications] = React.useState([]);
+  const [unread, setUnread] = React.useState(0);
+
+  React.useEffect(() => {
+    async function load() {
+      const [notifs, count] = await Promise.all([
+        sdk.notifications.getForUser(10),
+        sdk.notifications.getUnreadCount()
+      ]);
+      setNotifications(notifs);
+      setUnread(count);
+    }
+    load();
+  }, []);
+
+  async function sendTest() {
+    await sdk.notifications.send({
+      userId: sdk.auth.getUserId(),
+      title: 'Test from Plugin',
+      message: 'This notification was sent at ' + new Date().toLocaleTimeString(),
+      type: 'system_announcement'
+    });
+    sdk.notifications.showToast('Notification sent!', 'success');
+  }
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h2>Notifications ({unread} unread)</h2>
+      <button
+        onClick={sendTest}
+        style={{ padding: '8px 16px', background: '#10b981', color: 'white', borderRadius: 8, border: 'none', marginBottom: 16 }}
+      >
+        Send Test Notification
+      </button>
+      {notifications.map(n => (
+        <div key={n.id} style={{
+          padding: 10, margin: '4px 0', borderRadius: 8,
+          border: '1px solid ' + (n.is_read ? '#e5e7eb' : '#3b82f6'),
+          background: n.is_read ? 'transparent' : '#eff6ff'
+        }}>
+          <strong>{n.title}</strong>
+          <p style={{ fontSize: 13, color: '#6b7280' }}>{n.message}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+```json Response
+[
+  {
+    "id": "uuid",
+    "type": "payment_received",
+    "title": "Payment Received",
+    "message": "You received SLE 500",
+    "is_read": false,
+    "created_at": "2026-03-01T10:30:00Z"
+  }
+]
+```
+
+</CodeGroup>
+
+**Permissions needed:** `notifications:read`, `notifications:send`
+
+---
+
+## Chat Messages
+
+Send messages and read conversation history.
+
+<CodeGroup>
+
+```javascript Chat Demo
+function MyApp({ sdk }) {
+  const [conversations, setConversations] = React.useState([]);
+  const [messages, setMessages] = React.useState([]);
+  const [selectedConv, setSelectedConv] = React.useState(null);
+
+  React.useEffect(() => {
+    sdk.chat.getConversations(10).then(setConversations);
+  }, []);
+
+  async function openConversation(convId) {
+    setSelectedConv(convId);
+    const msgs = await sdk.chat.getMessages(convId, 20);
+    setMessages(msgs);
+  }
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h2>Conversations</h2>
+      {conversations.map(c => (
+        <div
+          key={c.id}
+          onClick={() => openConversation(c.id)}
+          style={{
+            padding: 10, margin: '4px 0', borderRadius: 8, cursor: 'pointer',
+            border: '1px solid ' + (selectedConv === c.id ? '#3b82f6' : '#e5e7eb')
+          }}
+        >
+          <strong>{c.subject || 'Conversation'}</strong>
+          {c.unread_count > 0 && <span style={{ marginLeft: 8, color: '#3b82f6' }}>({c.unread_count} new)</span>}
+          <p style={{ fontSize: 12, color: '#9ca3af' }}>{c.last_message_preview}</p>
+        </div>
+      ))}
+
+      {selectedConv && (
+        <div style={{ marginTop: 16, padding: 12, background: '#f9fafb', borderRadius: 8 }}>
+          <h3>Messages</h3>
+          {messages.map(m => (
+            <div key={m.id} style={{ padding: 6, margin: '2px 0' }}>
+              <strong style={{ fontSize: 13 }}>{m.sender_name}:</strong>
+              <span style={{ marginLeft: 8 }}>{m.content}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+</CodeGroup>
+
+**Permissions needed:** `chat:read`, `chat:send`
+
+---
+
+## Platform Users Table
+
+Admin-activated apps can read the users table directly.
+
+<CodeGroup>
+
+```javascript Users Dashboard
+function MyApp({ sdk }) {
+  const [users, setUsers] = React.useState([]);
+  const [error, setError] = React.useState(null);
+
+  React.useEffect(() => {
+    sdk.platform.getUsersTable({ is_active: true }, 20)
+      .then(setUsers)
+      .catch(e => setError(e.message));
+  }, []);
+
+  if (error) return <div style={{ color: 'red', padding: 20 }}>Error: {error}</div>;
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h2>Platform Users ({users.length})</h2>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
+            {['Name', 'Email', 'Phone', 'KYC', 'Joined'].map(h => (
+              <th key={h} style={{ padding: 8, textAlign: 'left', fontSize: 13 }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {users.map(u => (
+            <tr key={u.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+              <td style={{ padding: 8, fontSize: 13 }}>{u.first_name} {u.last_name}</td>
+              <td style={{ padding: 8, fontSize: 13 }}>{u.email}</td>
+              <td style={{ padding: 8, fontSize: 13 }}>{u.phone || '—'}</td>
+              <td style={{ padding: 8, fontSize: 13 }}>{u.kyc_status || '—'}</td>
+              <td style={{ padding: 8, fontSize: 13, color: '#9ca3af' }}>
+                {u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+```
+
+</CodeGroup>
+
+**Permissions needed:** `platform:users:read` (admin-activated only)
+
+---
+
+## Using Your Own Supabase
+
+If your app has its own Supabase backend:
+
+```javascript
+function MyApp({ sdk }) {
+  const [items, setItems] = React.useState([]);
+
+  React.useEffect(() => {
+    const client = sdk.storage.getClient();
+    if (client) {
+      client.from('products').select('*').then(({ data }) => setItems(data || []));
+    }
+  }, []);
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h2>My Products ({items.length})</h2>
+      {items.map(item => (
+        <div key={item.id}>{item.name} — ${item.price}</div>
+      ))}
+    </div>
+  );
+}
+```
+
+**No special permission needed** — your Supabase credentials are provided during app registration.

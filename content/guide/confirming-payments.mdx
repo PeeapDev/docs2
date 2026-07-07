@@ -1,0 +1,130 @@
+---
+title: "7 · Make confirmation bulletproof"
+description: "Why server-side polling — not the webhook, not the browser — is your source of truth today."
+---
+
+# Chapter 7 · Make confirmation bulletproof
+
+Chapter 6 showed the happy path: read the session, check it's `COMPLETE`, fulfil
+the order. This chapter makes that reliable for production, where customers close
+tabs, networks drop, and "I paid!" doesn't always mean they did.
+
+## The honest architecture (read this first)
+
+There are three ways a payment system can tell your server "the money arrived":
+
+1. **The browser redirect** — the customer's browser returns to your `redirectUrl`.
+2. **A webhook** — Peeap POSTs your server directly.
+3. **You ask** — your server polls Peeap for the session status.
+
+Here's the current reality of Peeap Pay, stated plainly:
+
+<Warning>
+**Peeap does not currently send merchant webhooks when a checkout completes.** The
+webhook system exists and you can register endpoints (see
+[Chapter 11](/guide/webhooks)), but no checkout-completion event is delivered to it
+today. **Do not build your fulfilment on a webhook you will not receive.**
+
+And the **browser redirect cannot be trusted** — the customer controls that URL.
+
+That leaves **#3: your server asks Peeap.** Server-side polling of the session is
+your source of truth. This chapter is about doing it well.
+</Warning>
+
+## Why polling actually works here
+
+You might worry: "if the customer closes the tab, who marks it paid?" Good news —
+the session can flip to `COMPLETE` **server-side**, without the browser, because:
+
+- For mobile-money payments, Peeap settles the session when the provider
+  confirms, independently of the customer's browser.
+- A background process also sweeps and settles paid sessions.
+
+So a session you created **will** reach `COMPLETE` on Peeap's side once the money
+lands — even if the customer vanished. Your job is simply to **keep asking until
+you see it** (or until it expires). That's what makes polling reliable rather than
+a hack.
+
+## Two places to poll
+
+**1. Right after the customer returns (foreground).** Snappy UX — show a "we're
+confirming your payment" screen and poll a few times:
+
+```javascript
+async function waitForPayment(sessionId, { tries = 10, delayMs = 3000 } = {}) {
+  for (let i = 0; i < tries; i++) {
+    const s = await getSession(sessionId); // GET /api/checkout/sessions/{id}
+    if (s.status === "COMPLETE") return s;
+    if (s.status === "EXPIRED") return s;
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  return null; // still OPEN — the reconciler (below) will catch it
+}
+```
+
+**2. A background reconciler (the safety net).** This is the part that makes you
+sleep at night. A scheduled job re-checks every session you created that hasn't
+reached a final state:
+
+```javascript
+// Runs every few minutes (cron / scheduled function)
+async function reconcileOpenSessions() {
+  const pending = await db.sessions.where({ status: "OPEN" }); // your table
+  for (const row of pending) {
+    const s = await getSession(row.sessionId);
+    if (s.status === "COMPLETE") {
+      await fulfilOrderOnce(row.sessionId, s); // idempotent — Chapter 8
+    } else if (s.status === "EXPIRED") {
+      await db.sessions.update(row.sessionId, { status: "EXPIRED" });
+    }
+  }
+}
+```
+
+<Note>
+The foreground poll is for **UX** (tell the customer quickly). The background
+reconciler is for **correctness** (no payment is ever missed, even if the customer
+closed the tab and your foreground poll gave up). You want **both** — but if you
+only build one, build the reconciler.
+</Note>
+
+## You must store every session you create
+
+The reconciler can only check sessions it knows about, and **there is no endpoint
+to list your payments** (confirmed against the API — only single-session lookups
+exist). So persistence is on you:
+
+<Steps>
+  <Step title="On create">
+    When `POST /api/checkout/create` returns, write a row:
+    `{ sessionId, reference, expectedAmount, status: "OPEN", createdAt }`.
+  </Step>
+  <Step title="On confirm">
+    When a session reaches `COMPLETE` (foreground poll or reconciler), fulfil the
+    order **once** and set the row to `PAID`.
+  </Step>
+  <Step title="On expiry">
+    After ~30 minutes an unpaid session becomes `EXPIRED`; mark it so the
+    reconciler stops polling it.
+  </Step>
+</Steps>
+
+This little table is also your reconciliation ledger — [Chapter 10](/guide/reconciliation)
+builds on it.
+
+<Tip>
+**Advanced** — Stop the reconciler from polling forever. A session is final once
+it's `COMPLETE` or `EXPIRED`; only re-poll rows that are still `OPEN` **and**
+younger than ~35 minutes (a small grace window past the 30-minute expiry).
+Everything older that never completed is genuinely abandoned.
+</Tip>
+
+## The rule
+
+> **Your server marks the order paid, and it does so only after it has read
+> `status: "COMPLETE"` directly from Peeap for a session it created — matching the
+> amount and reference it expected.** Not the browser. Not a webhook (yet).
+
+Next: make fulfilment safe to run more than once, because both your foreground
+poll and your reconciler might see the same completion. Continue to
+[Chapter 8 → Idempotency](/guide/idempotency).

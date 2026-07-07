@@ -1,0 +1,202 @@
+---
+title: "Recipe · School fee payment"
+description: "Collect school fees into the school's Peeap wallet from your own school portal."
+---
+
+# Recipe · School fee payment
+
+A school (or a school-management system like an InfixEdu portal) wants parents to
+pay fees online, with the money landing in **that school's** Peeap wallet. This
+recipe uses the server-to-server payment flow and routes funds to the right school
+by metadata.
+
+<Note>
+**There are two valid school flows — pick by what you need.** This recipe uses the
+simpler one.
+
+1. **Just collect a fee** → `POST /api/payments/initiate` (this recipe). A
+   server-to-server call that returns a payment link; no account linking. Use this
+   when all you want is "parent pays, money lands in the school wallet."
+2. **Link a Peeap account / act on a user's wallet** → the **OAuth
+   authorization-code flow** (real: the `/auth/authorize` consent page +
+   `POST /api/oauth/token`, scopes like `school:connect`, `wallet:read`,
+   `wallet:write`). Use this when your portal needs ongoing access to a user's
+   Peeap identity or wallet on their behalf. See the dedicated OAuth integration
+   doc for that flow.
+
+If you only need fee collection, you do **not** need OAuth — `payments/initiate`
+is enough.
+</Note>
+
+## The endpoint
+
+```http
+POST https://api.peeap.com/api/payments/initiate
+Authorization: Bearer sk_live_xxxxxxxxxxxxx
+Content-Type: application/json
+```
+
+<Note>
+**This flow authenticates with your *secret* key** (`sk_…`) in an `Authorization:
+Bearer` header — unlike the storefront checkout, which uses the *public* key in the
+body. Because this call happens server-to-server (your portal's backend → Peeap),
+the secret key is appropriate and safe. Never expose it to a browser.
+</Note>
+
+## The request
+
+```json
+{
+  "amount": 500,
+  "currency": "SLE",
+  "description": "Term 2 Fees — Greenfield Secondary",
+  "customer_email": "parent@example.com",
+  "customer_name": "Aminata Kamara",
+  "reference": "fee_invoice_8842",
+  "return_url": "https://greenfield.school.edu.sl/fees/paid",
+  "callback_url": "https://greenfield.school.edu.sl/fees/paid",
+  "metadata": {
+    "school_connection_id": "sc_3a91...",
+    "school_subdomain": "greenfield",
+    "source": "school_fees"
+  }
+}
+```
+
+### Routing money to the right school
+
+The `metadata` fields are what direct the payment into the correct school wallet.
+Peeap resolves the destination in this order:
+
+<Steps>
+  <Step title="school_connection_id (best)">
+    The exact id of the school's Peeap connection. Unambiguous — use this if you
+    have it.
+  </Step>
+  <Step title="school_subdomain">
+    The school's Peeap slug (e.g. `greenfield`). Used if no connection id is given.
+  </Step>
+  <Step title="Auto-detect (fallback)">
+    If your merchant website domain ends in `school.edu` / `school.sl`, or the
+    school name appears in the `description`, Peeap matches it. Relying on this is
+    fragile — prefer the explicit ids above.
+  </Step>
+</Steps>
+
+<Warning>
+Always send `school_connection_id` (or at least `school_subdomain`). The
+description-matching fallback exists for convenience but can route to the wrong
+school if two names are similar. Be explicit with money.
+</Warning>
+
+## The response
+
+```json
+{
+  "success": true,
+  "payment_url": "https://checkout.peeap.com/checkout/pay/cs_7f2a...",
+  "checkout_url": "https://checkout.peeap.com/checkout/pay/cs_7f2a...",
+  "session_id": "cs_7f2a...",
+  "reference": "fee_invoice_8842",
+  "amount": 500,
+  "currency": "SLE"
+}
+```
+
+Redirect the parent's browser to `payment_url`. They pay (mobile money, card, QR),
+and afterwards return to your `return_url`.
+
+## Confirm and reconcile — exactly like e-commerce
+
+A school fee is a checkout session under the hood (`session_id` is a `cs_…`), so
+**everything from Part 3 applies unchanged**:
+
+- Store the `session_id` against the invoice the moment you get it.
+- Confirm with `GET /api/checkout/sessions/{session_id}` — only mark the invoice
+  paid on `status: "COMPLETE"` with a matching amount.
+- Run the reconciler so a parent who closes the tab still gets their fee recorded.
+- Don't trust the `return_url` redirect alone.
+
+```javascript
+// after the parent returns (or via reconciler)
+const s = await getSessionSafe(session_id);
+if (s.status === "COMPLETE" && Number(s.amount) === invoice.amount) {
+  await markInvoicePaidOnce(invoice.id, s); // idempotent — Chapter 8
+}
+```
+
+## School webhooks actually work (use them)
+
+Unlike storefront checkout — where [Chapter 11](/guide/webhooks) warns that
+completion webhooks aren't delivered yet — **school integrations get real
+webhooks.** Register a school endpoint and Peeap will POST you events as they
+happen:
+
+| Event | Fires when |
+| --- | --- |
+| `fee.paid` | A fee is paid. |
+| `invoice.paid` | A school invoice is settled. |
+| `transaction.completed` | A student transaction completes (e.g. a vendor purchase). |
+
+Each delivery is signed so you can verify it's genuinely from Peeap:
+
+- **Header** `X-Peeap-Signature: sha256=<hmac>` and `X-Peeap-Event: <event>`
+- **Algorithm** HMAC-SHA256 over the **raw request body**, using your
+  subscription's secret
+- **Body** `{ "event": "...", "data": { ... }, "timestamp": "..." }`
+- Failed deliveries are retried; an endpoint is disabled after 10 consecutive
+  failures.
+
+```javascript
+import crypto from "crypto";
+
+app.post("/webhooks/peeap-school", express.raw({ type: "application/json" }), (req, res) => {
+  const sig = req.headers["x-peeap-signature"];          // "sha256=…"
+  const expected =
+    "sha256=" +
+    crypto.createHmac("sha256", process.env.SCHOOL_WEBHOOK_SECRET)
+          .update(req.body)                                // RAW body
+          .digest("hex");
+
+  if (sig !== expected) return res.status(400).send("bad signature");
+
+  const { event, data } = JSON.parse(req.body.toString("utf8"));
+  if (event === "fee.paid") markFeePaidOnce(data);         // be idempotent
+  res.status(200).send("ok");
+});
+```
+
+<Note>
+The school webhook signature scheme (`X-Peeap-Signature: sha256=<hmac>` over the raw
+body) is **different** from the general merchant scheme in
+[Chapter 11](/guide/webhooks) (`X-Webhook-Signature: t=…,v1=…`). Use the one above
+for school events. Even so, webhooks should *complement* a reconciler, not replace
+it — keep confirming via `GET /api/checkout/sessions/{id}` as your floor.
+</Note>
+
+## Advanced: in-school vendor purchases (NSI + PIN)
+
+Collecting **fees from parents** uses `payments/initiate` above. A different
+endpoint exists for **students spending inside the school** (canteen, bookshop) —
+a closed-loop flow keyed by the student's National Student Identifier (NSI):
+
+```http
+POST https://api.peeap.com/api/school/payments/initiate
+Authorization: Bearer <school API key>
+```
+
+```json
+{ "nsi": "A123456", "vendor_id": "vnd_22", "amount": 15,
+  "currency": "SLE", "description": "Lunch", "items": [] }
+```
+
+This returns a **school payment session** (`ps_…`, distinct from `cs_…`) that the
+student authorises with their PIN via `POST /api/payments/authorize`. Use this only
+for on-campus student spending, not for parent fee collection. It's a separate
+sub-system — treat it as its own recipe if you need it.
+
+<Note>
+**Which do I use?** Parents paying fees from home → `payments/initiate` (this
+recipe). Students buying from a school vendor with their student wallet →
+`school/payments/initiate` (the NSI flow).
+</Note>

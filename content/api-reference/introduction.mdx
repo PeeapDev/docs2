@@ -1,0 +1,159 @@
+---
+title: API Reference
+description: "Complete API reference for Payment System"
+---
+
+# API Reference
+
+The Payment System API is organized around REST. Our API accepts JSON-encoded request bodies, returns JSON-encoded responses, and uses standard HTTP response codes and authentication.
+
+## Base URL
+
+All API requests should be made to:
+
+```
+https://api.paymentsystem.com/v1
+```
+
+For local development:
+
+```
+http://localhost:3000/api/v1
+```
+
+## Authentication
+
+All API endpoints (except registration and login) require authentication using a Bearer token:
+
+```bash
+curl https://api.paymentsystem.com/v1/users/me \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+See [Authentication](/authentication) for details on obtaining tokens.
+
+## Request Format
+
+### Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes* | Bearer token for authentication |
+| `Content-Type` | Yes | `application/json` for POST/PUT/PATCH |
+| `Idempotency-Key` | No | Unique key to prevent duplicate requests |
+
+*Not required for `/auth/register` and `/auth/login`
+
+### Request Body
+
+For POST, PUT, and PATCH requests, send a JSON body:
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/wallets \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "currencyCode": "USD"
+  }'
+```
+
+## Response Format
+
+All responses are returned in JSON format:
+
+```json
+{
+  "id": "wal_abc123",
+  "currencyCode": "USD",
+  "availableBalance": 0,
+  "status": "ACTIVE",
+  "createdAt": "2024-01-15T10:30:00Z"
+}
+```
+
+### Pagination
+
+List endpoints support pagination:
+
+```bash
+curl "https://api.paymentsystem.com/v1/transactions?page=1&limit=20" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+Response includes pagination metadata:
+
+```json
+{
+  "data": [...],
+  "meta": {
+    "page": 1,
+    "limit": 20,
+    "total": 150,
+    "totalPages": 8
+  }
+}
+```
+
+## HTTP Status Codes
+
+| Code | Description |
+|------|-------------|
+| 200 | Success |
+| 201 | Created |
+| 400 | Bad Request - Invalid parameters |
+| 401 | Unauthorized - Invalid or missing token |
+| 403 | Forbidden - Insufficient permissions |
+| 404 | Not Found - Resource doesn't exist |
+| 409 | Conflict - Resource already exists |
+| 422 | Unprocessable Entity - Validation failed |
+| 429 | Too Many Requests - Rate limit exceeded |
+| 500 | Internal Server Error |
+
+## Error Format
+
+Errors are returned with a consistent structure:
+
+```json
+{
+  "statusCode": 400,
+  "message": "Validation failed",
+  "errors": [
+    {
+      "field": "email",
+      "message": "Invalid email format"
+    }
+  ]
+}
+```
+
+## Rate Limiting
+
+API requests are rate-limited to ensure fair usage:
+
+| Endpoint Type | Limit |
+|--------------|-------|
+| Authentication | 10 requests/minute |
+| Read operations | 100 requests/minute |
+| Write operations | 30 requests/minute |
+
+Rate limit headers are included in responses:
+
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 95
+X-RateLimit-Reset: 1705312200
+```
+
+## Idempotency
+
+For POST requests that create resources, you can include an `Idempotency-Key` header to prevent duplicate operations:
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/transactions/authorize \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Idempotency-Key: unique-request-123" \
+  -H "Content-Type: application/json" \
+  -d '{...}'
+```
+
+Requests with the same idempotency key within 24 hours will return the same response.

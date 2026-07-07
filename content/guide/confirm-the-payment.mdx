@@ -1,0 +1,158 @@
+---
+title: "6 · Confirm the payment"
+description: "Verify the session server-side before you trust it — and ship your first integration."
+---
+
+# Chapter 6 · Confirm the payment
+
+You've created a session, sent the customer to pay, and they've come back. The
+last step — and the most important one — is for **your server** to confirm the
+money actually arrived before you deliver anything.
+
+## Read the session
+
+Ask Peeap for the current state of the session by its id:
+
+```http
+GET https://api.peeap.com/api/checkout/sessions/{sessionId}
+```
+
+<CodeGroup>
+
+```bash curl
+curl https://api.peeap.com/api/checkout/sessions/cs_3f9a8b2c1d4e5f60718293a4b5c6d7e8
+```
+
+```javascript Node.js
+const res = await fetch(
+  `https://api.peeap.com/api/checkout/sessions/${sessionId}`
+);
+const session = await res.json();
+
+if (session.status === "COMPLETE") {
+  // ✅ money has arrived — safe to fulfil the order
+  await markOrderPaid(session.reference);
+}
+```
+
+```python Python
+import requests
+
+session = requests.get(
+    f"https://api.peeap.com/api/checkout/sessions/{session_id}"
+).json()
+
+if session["status"] == "COMPLETE":
+    mark_order_paid(session["reference"])
+```
+
+</CodeGroup>
+
+## The status field
+
+The session's `status` tells you exactly where the payment is:
+
+| Status | Meaning | What you do |
+| --- | --- | --- |
+| `OPEN` | Created, not yet paid. | Wait — the customer hasn't finished. |
+| `COMPLETE` | Paid. Money is in your wallet. | ✅ Fulfil the order. |
+| `EXPIRED` | 30 minutes passed without payment. | Ask the customer to try again (new session). |
+
+The only state that means "deliver the goods" is **`COMPLETE`**.
+
+## Verify the amount, not just the status
+
+A complete session isn't enough on its own — confirm it's complete **for the
+amount you expected**. The session echoes back your `reference` and the original
+`expectedAmount`:
+
+```javascript
+const session = await getSession(sessionId);
+
+const ok =
+  session.status === "COMPLETE" &&
+  Number(session.amount) === expectedAmountForThisOrder &&
+  session.reference === thisOrdersReference;
+
+if (ok) {
+  await fulfilOrder(session.reference);
+} else {
+  await flagForReview(sessionId); // amount or reference mismatch
+}
+```
+
+<Warning>
+**Match `reference` and `amount` to your own records.** Confirming only `status ===
+"COMPLETE"` lets a mismatched or replayed session slip through. Tie every
+confirmation back to the order you created it for.
+</Warning>
+
+## Don't poll forever
+
+When the customer returns from the payment page, the session may still be flipping
+from `OPEN` to `COMPLETE`. A short, bounded poll is fine:
+
+```javascript
+async function waitForPayment(sessionId, { tries = 10, delayMs = 3000 } = {}) {
+  for (let i = 0; i < tries; i++) {
+    const s = await getSession(sessionId);
+    if (s.status === "COMPLETE") return s;
+    if (s.status === "EXPIRED") return s;
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  return null; // still OPEN — fall back to webhooks
+}
+```
+
+<Tip>
+**Advanced — browser polling is the fast path, not the safety net.** Polling in the
+customer's browser breaks the moment they close the tab. The durable answer is a
+**server-side reconciler**: a background job that re-checks every session you
+created until it's `COMPLETE` or `EXPIRED`, independent of the browser. (Many
+platforms use webhooks for this; Peeap's checkout does **not** deliver webhooks
+today — see [Chapter 11](/guide/webhooks) — so the reconciler is essential, not
+optional.) This isn't theoretical: relying on the browser alone has, in
+production, left real payments stuck because nothing server-side ever recorded
+them. [Chapter 7](/guide/confirming-payments) builds the reconciler.
+</Tip>
+
+## You've shipped your first integration 🎉
+
+Put together, your first end-to-end flow is:
+
+<Steps>
+  <Step title="Server creates a session">
+    `POST /api/checkout/create` with your `pk_…` key and an amount → save the
+    `sessionId` against the order.
+  </Step>
+  <Step title="Customer pays">
+    Send them to `paymentUrl`; they pay on the hosted page.
+  </Step>
+  <Step title="Server confirms">
+    `GET /api/checkout/sessions/{sessionId}` → only when `status === "COMPLETE"`
+    and the amount/reference match, mark the order paid.
+  </Step>
+</Steps>
+
+That's a complete, correct Peeap Pay integration. Everything else in this book
+makes it more robust.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Going to Production" icon="shield-check" href="/guide/confirming-payments">
+    Make confirmation bulletproof, idempotency, failure handling, reconciliation,
+    and webhooks — the parts that keep money from getting lost.
+  </Card>
+  <Card title="Recipes" icon="book">
+    Full worked examples: e-commerce, school fees, wallet top-up, POS / QR.
+    *(Coming next.)*
+  </Card>
+</CardGroup>
+
+<Note>
+**Before going live:** swap your `pk_test_…` key for `pk_live_…` (from the
+environment, not your code), make sure your business is approved past the trial
+limit ([Chapter 2](/guide/test-vs-live)), and confirm your server — not the
+browser — is the thing that marks orders paid.
+</Note>

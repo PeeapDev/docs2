@@ -1,0 +1,468 @@
+---
+title: SDK Reference
+description: "Complete API reference for the PeeapSDK — all methods available to plugin apps"
+---
+
+# PeeapSDK Reference
+
+Your plugin component receives `sdk` as a prop. Every method connects to real platform services — same APIs the Peeap host app uses.
+
+```javascript
+export default function MyApp({ sdk }) {
+  // sdk.auth, sdk.wallet, sdk.notifications, sdk.chat, etc.
+}
+```
+
+---
+
+## sdk.auth
+
+User authentication and profile.
+
+### getCurrentUser()
+
+<ParamField path="permission" type="string">user:profile:read</ParamField>
+
+Returns the current user's full profile.
+
+```javascript
+const user = await sdk.auth.getCurrentUser();
+// Returns:
+// {
+//   id: "uuid",
+//   email: "user@example.com",
+//   firstName: "John",
+//   lastName: "Doe",
+//   phone: "+23276000000",
+//   profilePicture: "https://...",
+//   roles: ["user"],
+//   kycStatus: "approved"
+// }
+```
+
+### getUserId()
+
+Returns the current user's ID (no permission required).
+
+```javascript
+const userId = sdk.auth.getUserId();
+// "550e8400-e29b-41d4-a716-446655440000"
+```
+
+---
+
+## sdk.wallet
+
+Wallet balances, transactions, and payments.
+
+### getBalance(currency?)
+
+<ParamField path="permission" type="string">wallet:read</ParamField>
+
+```javascript
+// Get primary wallet balance
+const balance = await sdk.wallet.getBalance();
+// 15000.00
+
+// Get balance for specific currency
+const sleBalance = await sdk.wallet.getBalance('SLE');
+// 15000.00
+```
+
+### listWallets()
+
+<ParamField path="permission" type="string">wallet:read</ParamField>
+
+```javascript
+const wallets = await sdk.wallet.listWallets();
+// [
+//   { id: "uuid", currency: "SLE", balance: 15000, wallet_type: "primary", status: "ACTIVE" },
+//   { id: "uuid", currency: "USD", balance: 50, wallet_type: "primary", status: "ACTIVE" }
+// ]
+```
+
+### getTransactions(walletId, limit?)
+
+<ParamField path="permission" type="string">wallet:transactions</ParamField>
+
+```javascript
+const transactions = await sdk.wallet.getTransactions("wallet-uuid", 20);
+// [
+//   {
+//     id: "uuid",
+//     type: "TRANSFER",
+//     amount: 500,
+//     currency: "SLE",
+//     status: "COMPLETED",
+//     description: "Payment to vendor",
+//     reference: "TXN-123",
+//     createdAt: "2026-03-01T10:30:00Z"
+//   }
+// ]
+```
+
+### requestPayment(request)
+
+<ParamField path="permission" type="string">wallet:transfer</ParamField>
+
+Shows a confirmation dialog to the user, then processes the payment.
+
+```javascript
+const result = await sdk.wallet.requestPayment({
+  amount: 1000,
+  currency: 'SLE',
+  description: 'Premium subscription',
+  recipientId: 'recipient-user-uuid',  // optional
+  metadata: { plan: 'premium' }
+});
+
+if (result.success) {
+  console.log('Paid! Transaction:', result.transactionId);
+} else {
+  console.log('Failed:', result.error); // "Cancelled by user" or "Insufficient balance"
+}
+```
+
+### sendMoney(request)
+
+<ParamField path="permission" type="string">wallet:transfer</ParamField>
+
+Direct transfer to another user (no confirmation UI).
+
+```javascript
+const result = await sdk.wallet.sendMoney({
+  amount: 500,
+  currency: 'SLE',
+  description: 'Refund for order #123',
+  recipientId: 'recipient-user-uuid'  // required
+});
+```
+
+---
+
+## sdk.notifications
+
+Real platform notifications and toasts.
+
+### showToast(message, type?)
+
+No permission required. Shows a toast notification in the UI.
+
+```javascript
+sdk.notifications.showToast('Payment successful!', 'success');
+sdk.notifications.showToast('Something went wrong', 'error');
+sdk.notifications.showToast('Processing...', 'info');
+sdk.notifications.showToast('Low balance', 'warning');
+```
+
+### send(params)
+
+<ParamField path="permission" type="string">notifications:send</ParamField>
+
+Creates a real platform notification delivered to the user.
+
+```javascript
+await sdk.notifications.send({
+  userId: 'target-user-uuid',
+  title: 'New Order',
+  message: 'You have a new order from the marketplace',
+  type: 'system_announcement',
+  actionUrl: '/orders/123',
+  data: { orderId: '123' }
+});
+```
+
+### getForUser(limit?)
+
+<ParamField path="permission" type="string">notifications:read</ParamField>
+
+```javascript
+const notifications = await sdk.notifications.getForUser(10);
+// [
+//   {
+//     id: "uuid",
+//     type: "payment_received",
+//     title: "Payment Received",
+//     message: "You received SLE 500 from John",
+//     is_read: false,
+//     created_at: "2026-03-01T10:30:00Z"
+//   }
+// ]
+```
+
+### getUnreadCount()
+
+<ParamField path="permission" type="string">notifications:read</ParamField>
+
+```javascript
+const count = await sdk.notifications.getUnreadCount();
+// 5
+```
+
+### markAsRead(notificationId)
+
+<ParamField path="permission" type="string">notifications:read</ParamField>
+
+```javascript
+await sdk.notifications.markAsRead('notification-uuid');
+```
+
+---
+
+## sdk.chat
+
+Messaging and conversations.
+
+### sendMessage(params)
+
+<ParamField path="permission" type="string">chat:send</ParamField>
+
+Sends a message to another user. Automatically creates a conversation if one doesn't exist.
+
+```javascript
+const result = await sdk.chat.sendMessage({
+  recipientId: 'user-uuid',
+  content: 'Hi! Your order is ready for pickup.',
+  metadata: { orderId: '123' }
+});
+
+if (result.success) {
+  console.log('Message sent:', result.messageId);
+}
+```
+
+### getConversations(limit?)
+
+<ParamField path="permission" type="string">chat:read</ParamField>
+
+```javascript
+const conversations = await sdk.chat.getConversations(20);
+// [
+//   {
+//     id: "uuid",
+//     type: "general",
+//     subject: "Order discussion",
+//     status: "open",
+//     last_message_at: "2026-03-01T10:30:00Z",
+//     last_message_preview: "Thanks for your order!",
+//     unread_count: 2,
+//     created_at: "2026-02-28T08:00:00Z"
+//   }
+// ]
+```
+
+### getMessages(conversationId, limit?)
+
+<ParamField path="permission" type="string">chat:read</ParamField>
+
+```javascript
+const messages = await sdk.chat.getMessages('conversation-uuid', 50);
+// [
+//   {
+//     id: "uuid",
+//     conversation_id: "conversation-uuid",
+//     content: "Hello! How can I help?",
+//     sender_id: "user-uuid",
+//     sender_name: "John Doe",
+//     created_at: "2026-03-01T10:30:00Z"
+//   }
+// ]
+```
+
+---
+
+## sdk.contacts
+
+Search and lookup platform users.
+
+### searchUsers(query, limit?)
+
+<ParamField path="permission" type="string">contacts:search</ParamField>
+
+Search by name, email, or phone.
+
+```javascript
+const users = await sdk.contacts.searchUsers('john', 10);
+// [
+//   {
+//     id: "uuid",
+//     email: "john@example.com",
+//     phone: "+23276000000",
+//     first_name: "John",
+//     last_name: "Doe",
+//     profile_picture: "https://..."
+//   }
+// ]
+```
+
+### getUserById(userId)
+
+<ParamField path="permission" type="string">contacts:read</ParamField>
+
+```javascript
+const user = await sdk.contacts.getUserById('user-uuid');
+// { id, email, phone, first_name, last_name, profile_picture } or null
+```
+
+### getUserByPhone(phone)
+
+<ParamField path="permission" type="string">contacts:read</ParamField>
+
+```javascript
+const user = await sdk.contacts.getUserByPhone('+23276000000');
+```
+
+### getUserByEmail(email)
+
+<ParamField path="permission" type="string">contacts:read</ParamField>
+
+```javascript
+const user = await sdk.contacts.getUserByEmail('user@example.com');
+```
+
+---
+
+## sdk.platform
+
+Direct database access for admin-activated apps.
+
+### query(table, options?)
+
+<ParamField path="permission" type="string">platform:query</ParamField>
+
+Query allowed platform tables: `users`, `wallets`, `transactions`, `notifications`, `profiles`, `merchants`, `conversations`.
+
+```javascript
+// Get active merchants
+const merchants = await sdk.platform.query('merchants', {
+  select: 'id, business_name, status',
+  filters: { status: 'active' },
+  limit: 50,
+  orderBy: 'created_at',
+  ascending: false
+});
+
+// Get recent transactions
+const txns = await sdk.platform.query('transactions', {
+  filters: { status: 'COMPLETED' },
+  limit: 100,
+  orderBy: 'created_at',
+  ascending: false
+});
+```
+
+### getUsersTable(filters?, limit?)
+
+<ParamField path="permission" type="string">platform:users:read</ParamField>
+
+```javascript
+// Get all active users
+const users = await sdk.platform.getUsersTable({ is_active: true }, 100);
+// [
+//   {
+//     id: "uuid",
+//     email: "user@example.com",
+//     first_name: "John",
+//     last_name: "Doe",
+//     phone: "+23276000000",
+//     roles: ["user"],
+//     kyc_status: "approved",
+//     account_type: "personal",
+//     is_active: true,
+//     created_at: "2026-01-15T08:00:00Z"
+//   }
+// ]
+```
+
+<Warning>
+  `platform:query` and `platform:users:read` are admin-only permissions. Your app must be explicitly approved by a Peeap admin to use these.
+</Warning>
+
+---
+
+## sdk.storage
+
+Access your app's own Supabase backend.
+
+### getClient()
+
+Returns a Supabase client connected to your plugin's own project (if configured).
+
+```javascript
+const client = sdk.storage.getClient();
+if (client) {
+  const { data } = await client.from('my_products').select('*');
+  console.log(data);
+}
+```
+
+<Info>
+  Only available if you provided Supabase credentials when creating your app.
+  Each app gets its own isolated database — your data never mixes with the platform or other apps.
+</Info>
+
+---
+
+## sdk.navigation
+
+Route within the Peeap host app.
+
+### navigate(path)
+
+```javascript
+sdk.navigation.navigate('/wallets');
+```
+
+### goBack()
+
+```javascript
+sdk.navigation.goBack();
+```
+
+### getParams()
+
+```javascript
+const params = sdk.navigation.getParams();
+// { appSlug: "my-app" }
+```
+
+---
+
+## sdk.ui
+
+Native UI primitives.
+
+### showPaymentSheet(request)
+
+<ParamField path="permission" type="string">wallet:transfer</ParamField>
+
+Shows the native Peeap payment confirmation UI.
+
+```javascript
+const result = await sdk.ui.showPaymentSheet({
+  amount: 2000,
+  currency: 'SLE',
+  description: 'Event ticket purchase'
+});
+```
+
+### showConfirmDialog(options)
+
+```javascript
+const confirmed = await sdk.ui.showConfirmDialog({
+  title: 'Delete Item',
+  message: 'Are you sure you want to delete this item?',
+  confirmLabel: 'Delete',
+  cancelLabel: 'Cancel'
+});
+
+if (confirmed) {
+  // user clicked Delete
+}
+```
+
+### showAlert(title, message)
+
+```javascript
+sdk.ui.showAlert('Success', 'Your order has been placed!');
+```

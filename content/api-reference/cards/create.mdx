@@ -1,0 +1,134 @@
+---
+title: Create Card
+api: POST /cards
+description: "Issue a new virtual or physical card"
+---
+
+# Create Card
+
+Issue a new virtual or physical card linked to a wallet.
+
+## Endpoint
+
+```
+POST /cards
+```
+
+## Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Authorization` | Yes | Bearer access token |
+| `Content-Type` | Yes | application/json |
+
+## Request Body
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `walletId` | string | Yes | Wallet to link the card to |
+| `type` | string | Yes | Card type: `VIRTUAL` or `PHYSICAL` |
+| `label` | string | No | Custom label for the card |
+| `spendingLimits` | object | No | Custom spending limits |
+
+### Spending Limits Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `daily` | number | Maximum daily spending |
+| `monthly` | number | Maximum monthly spending |
+| `perTransaction` | number | Maximum per transaction |
+
+## Example Request
+
+### Virtual Card
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/cards \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "walletId": "wal_abc123",
+    "type": "VIRTUAL",
+    "label": "Online Shopping"
+  }'
+```
+
+### Physical Card with Custom Limits
+
+```bash
+curl -X POST https://api.paymentsystem.com/v1/cards \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "walletId": "wal_abc123",
+    "type": "PHYSICAL",
+    "label": "Daily Expenses",
+    "spendingLimits": {
+      "daily": 500.00,
+      "monthly": 5000.00,
+      "perTransaction": 200.00
+    }
+  }'
+```
+
+## Response
+
+### Success (201 Created)
+
+```json
+{
+  "id": "crd_abc123",
+  "externalId": "crd_1234567890",
+  "walletId": "wal_abc123",
+  "userId": "usr_xyz789",
+  "type": "VIRTUAL",
+  "status": "PENDING_ACTIVATION",
+  "lastFour": "4242",
+  "expiryMonth": 12,
+  "expiryYear": 2027,
+  "brand": "VISA",
+  "label": "Online Shopping",
+  "spendingLimits": {
+    "daily": 1000.00,
+    "monthly": 10000.00,
+    "perTransaction": 500.00
+  },
+  "createdAt": "2024-01-15T10:30:00Z"
+}
+```
+
+### Errors
+
+| Status | Code | Description |
+|--------|------|-------------|
+| 400 | `INVALID_TYPE` | Invalid card type |
+| 401 | `UNAUTHORIZED` | Invalid or missing access token |
+| 403 | `KYC_REQUIRED` | Higher KYC tier required for this card type |
+| 404 | `WALLET_NOT_FOUND` | Wallet does not exist |
+| 422 | `CARD_LIMIT_REACHED` | Maximum number of cards reached |
+
+```json
+{
+  "statusCode": 403,
+  "message": "Physical cards require KYC Tier 2",
+  "error": "KYC_REQUIRED",
+  "details": {
+    "currentTier": 1,
+    "requiredTier": 2
+  }
+}
+```
+
+## KYC Requirements
+
+| Card Type | Minimum KYC Tier |
+|-----------|-----------------|
+| Virtual | Tier 1 |
+| Physical | Tier 2 |
+
+## Notes
+
+- Virtual cards are issued instantly
+- Physical cards require shipping (additional API call for address)
+- Cards are created in `PENDING_ACTIVATION` status
+- Use the [Activate Card](/api-reference/cards/activate) endpoint to activate
