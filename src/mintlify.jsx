@@ -74,10 +74,76 @@ export const RequestExample = ({ children }) => <div className="example">{childr
 export const ResponseExample = ({ children }) => <div className="example">{children}</div>;
 export const Snippet = ({ children }) => <>{children}</>;
 
+// Code block with a copy button (overrides the default <pre>).
+export function Pre(props) {
+  const ref = React.useRef(null);
+  const [copied, setCopied] = React.useState(false);
+  const copy = () => {
+    const text = ref.current?.innerText || '';
+    navigator.clipboard?.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  return (
+    <div className="code-block">
+      <button className={`code-copy ${copied ? 'copied' : ''}`} onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>
+      <pre ref={ref} {...props} />
+    </div>
+  );
+}
+
+export const Table = (props) => <div className="table-wrap"><table {...props} /></div>;
+
+// "Try it here" — a live API request widget. Usage in MDX:
+//   <TryIt method="POST" url="/verify/create" body={`{ "phone": "077601707" }`} />
+export function TryIt({ method = 'POST', url = '', body = '' }) {
+  const initial = typeof body === 'string' ? body : JSON.stringify(body, null, 2);
+  const [input, setInput] = React.useState(initial);
+  const [resp, setResp] = React.useState(null);
+  const [status, setStatus] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+  const send = async () => {
+    setLoading(true); setResp(null); setStatus(null);
+    try {
+      const opts = { method, headers: { 'Content-Type': 'application/json' } };
+      if (method.toUpperCase() !== 'GET' && input.trim()) opts.body = input;
+      const full = url.startsWith('http') ? url : `https://api.peeap.com${url.startsWith('/') ? '' : '/'}${url}`;
+      const r = await fetch(full, opts);
+      setStatus(r.status);
+      const t = await r.text();
+      try { setResp(JSON.stringify(JSON.parse(t), null, 2)); } catch { setResp(t); }
+    } catch (e) { setStatus('ERR'); setResp(String(e?.message || e)); }
+    finally { setLoading(false); }
+  };
+  const m = method.toLowerCase();
+  return (
+    <div className="tryit">
+      <div className="tryit-head">
+        <span className={`tryit-method ${m}`}>{method.toUpperCase()}</span>
+        <span className="tryit-url">{url}</span>
+        <button className="btn primary" onClick={send} disabled={loading}>{loading ? 'Sending…' : 'Send'}</button>
+      </div>
+      <div className="tryit-body">
+        {method.toUpperCase() !== 'GET' && (
+          <textarea value={input} onChange={(e) => setInput(e.target.value)} spellCheck={false} placeholder="Request body (JSON)" />
+        )}
+        {status !== null && (
+          <div className="tryit-resp">
+            <div className={`tryit-status ${typeof status === 'number' && status < 400 ? 'ok' : 'err'}`}>Status: {status}</div>
+            <pre>{resp}</pre>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const known = {
   Info, Note, Tip, Warning, Check, Card, CardGroup, Columns, Steps, Step,
   Tabs, Tab, Accordion, AccordionGroup, CodeGroup, Frame, Icon, Tooltip,
   ParamField, ResponseField, Expandable, RequestExample, ResponseExample, Snippet,
+  TryIt, pre: Pre, table: Table,
 };
 
 const Passthrough = ({ children }) => <>{children}</>;
