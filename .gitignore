@@ -2,4 +2,8 @@ node_modules
 dist
 .vercel
 
-.vercel
+# generated at build by scripts/gen-llms.mjs
+public/llms.txt
+public/llms-full.txt
+public/sitemap.xml
+public/robots.txt

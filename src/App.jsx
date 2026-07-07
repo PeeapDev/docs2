@@ -130,7 +130,16 @@ export function App() {
   const [open, setOpen] = React.useState(false);
   const loc = useLocation();
   const key = loc.pathname.replace(/^\//, '').replace(/\/$/, '') || 'introduction';
-  React.useEffect(() => { window.scrollTo(0, 0); }, [key]);
+  React.useEffect(() => {
+    const entry = pages[key];
+    const title = entry?.meta?.title || titleFor(key);
+    document.title = `${title} · Peeap Docs`;
+    const desc = entry?.meta?.description || 'Peeap developer documentation — payments, wallets, cards, and the phone Verification API.';
+    let m = document.querySelector('meta[name="description"]');
+    if (!m) { m = document.createElement('meta'); m.setAttribute('name', 'description'); document.head.appendChild(m); }
+    m.setAttribute('content', desc);
+    window.scrollTo(0, 0);
+  }, [key]);
   return (
     <div className={`layout ${open ? 'nav-open' : ''}`}>
       <button className="menu-btn" onClick={() => setOpen((o) => !o)} aria-label="Menu">☰</button>
