@@ -32,14 +32,14 @@ GET /wallets
 ## Example Request
 
 ```bash
-curl https://api.paymentsystem.com/v1/wallets \
+curl https://api.peeap.com/wallets \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
 ### With Filters
 
 ```bash
-curl "https://api.paymentsystem.com/v1/wallets?currency=USD&status=ACTIVE" \
+curl "https://api.peeap.com/wallets?currency=SLE&status=ACTIVE" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
@@ -55,7 +55,7 @@ curl "https://api.paymentsystem.com/v1/wallets?currency=USD&status=ACTIVE" \
       "externalId": "wal_1234567890",
       "ownerId": "usr_xyz789",
       "ownerType": "USER",
-      "currencyCode": "USD",
+      "currencyCode": "SLE",
       "availableBalance": 1000.00,
       "heldBalance": 50.00,
       "status": "ACTIVE",
@@ -68,7 +68,7 @@ curl "https://api.paymentsystem.com/v1/wallets?currency=USD&status=ACTIVE" \
       "externalId": "wal_0987654321",
       "ownerId": "usr_xyz789",
       "ownerType": "USER",
-      "currencyCode": "EUR",
+      "currencyCode": "USD",
       "availableBalance": 500.00,
       "heldBalance": 0,
       "status": "ACTIVE",

@@ -25,16 +25,16 @@ POST /wallets
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `currencyCode` | string | Yes | ISO 4217 currency code (USD, EUR, GBP, etc.) |
+| `currencyCode` | string | Yes | ISO 4217 currency code. Defaults to `SLE` (Sierra Leonean Leone) — the platform's settlement currency. |
 
 ## Example Request
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/wallets \
+curl -X POST https://api.peeap.com/wallets \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "currencyCode": "USD"
+    "currencyCode": "SLE"
   }'
 ```
 
@@ -48,7 +48,7 @@ curl -X POST https://api.paymentsystem.com/v1/wallets \
   "externalId": "wal_1234567890",
   "ownerId": "usr_xyz789",
   "ownerType": "USER",
-  "currencyCode": "USD",
+  "currencyCode": "SLE",
   "availableBalance": 0,
   "heldBalance": 0,
   "status": "ACTIVE",
@@ -69,25 +69,24 @@ curl -X POST https://api.paymentsystem.com/v1/wallets \
 ```json
 {
   "statusCode": 409,
-  "message": "Wallet already exists for USD",
+  "message": "Wallet already exists for SLE",
   "error": "WALLET_EXISTS"
 }
 ```
 
 ## Supported Currencies
 
-| Code | Currency |
-|------|----------|
-| `USD` | US Dollar |
-| `EUR` | Euro |
-| `GBP` | British Pound |
+| Code | Currency | Notes |
+|------|----------|-------|
+| `SLE` | Sierra Leonean Leone | **Default.** The canonical settlement currency — all mobile-money top-ups and payouts settle in SLE. |
+| `USD` | US Dollar | Available for USD-denominated balances; requires a USD-enabled account. |
 
 <Info>
-  Additional currencies may be available depending on your account configuration and region.
+  Peeap settles in **SLE**. The older `NLE`/`SLL` labels are display aliases only — always send `SLE` as the currency code. `USD` is the only non-Leone currency generally available, subject to account configuration.
 </Info>
 
 ## Notes
 
-- Users start with default limits based on their KYC tier
+- Users start with default limits based on their KYC tier (tier 0: SLE 1,000 · tier 1: SLE 5,000 · tier 2: SLE 30,000 · tier 3: unlimited)
 - Only one wallet per currency is allowed per user
 - New wallets have zero balance and are immediately active

@@ -21,7 +21,7 @@ Payment System uses JWT (JSON Web Tokens) for API authentication. After logging 
 New users receive tokens upon successful registration:
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/auth/register \
+curl -X POST https://api.peeap.com/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",
@@ -36,7 +36,7 @@ curl -X POST https://api.paymentsystem.com/v1/auth/register \
 Existing users can login to get new tokens:
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/auth/login \
+curl -X POST https://api.peeap.com/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",
@@ -64,7 +64,7 @@ Both endpoints return the same token structure:
 Include the access token in the `Authorization` header for all authenticated requests:
 
 ```bash
-curl https://api.paymentsystem.com/v1/users/me \
+curl https://api.peeap.com/users/me \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
@@ -77,7 +77,7 @@ curl https://api.paymentsystem.com/v1/users/me \
 When your access token expires, use the refresh token to get a new one without requiring the user to login again:
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/auth/refresh \
+curl -X POST https://api.peeap.com/auth/refresh \
   -H "Content-Type: application/json" \
   -d '{
     "refreshToken": "YOUR_REFRESH_TOKEN"
@@ -100,7 +100,7 @@ curl -X POST https://api.paymentsystem.com/v1/auth/refresh \
 To invalidate your current session:
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/auth/logout \
+curl -X POST https://api.peeap.com/auth/logout \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -141,7 +141,7 @@ When MFA is enabled, login returns a special response requiring the MFA code:
 Submit the MFA code to complete authentication:
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/auth/login \
+curl -X POST https://api.peeap.com/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",

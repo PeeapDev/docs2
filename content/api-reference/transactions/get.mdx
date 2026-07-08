@@ -29,7 +29,7 @@ GET /transactions/{transactionId}
 ## Example Request
 
 ```bash
-curl https://api.paymentsystem.com/v1/transactions/txn_abc123 \
+curl https://api.peeap.com/transactions/txn_abc123 \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
@@ -44,7 +44,7 @@ curl https://api.paymentsystem.com/v1/transactions/txn_abc123 \
   "type": "PURCHASE",
   "status": "CAPTURED",
   "amount": 99.99,
-  "currency": "USD",
+  "currency": "SLE",
   "cardId": "crd_xyz789",
   "walletId": "wal_def456",
   "merchant": {
@@ -66,7 +66,7 @@ curl https://api.paymentsystem.com/v1/transactions/txn_abc123 \
   },
   "originalAmount": 99.99,
   "billingAmount": 99.99,
-  "billingCurrency": "USD",
+  "billingCurrency": "SLE",
   "exchangeRate": 1.0,
   "metadata": {
     "orderId": "ORD-12345"

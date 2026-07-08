@@ -23,7 +23,7 @@ Configure a publicly accessible HTTPS endpoint that can receive POST requests.
 ### 2. Register the Webhook
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/webhooks \
+curl -X POST https://api.peeap.com/webhooks \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -50,7 +50,7 @@ All webhooks have a consistent structure:
     "id": "txn_xyz789",
     "type": "PURCHASE",
     "amount": 99.99,
-    "currency": "USD",
+    "currency": "SLE",
     "status": "CAPTURED"
   }
 }
@@ -100,7 +100,7 @@ After 5 failed attempts, the webhook is marked as failed.
 Send a test event to verify your endpoint:
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/webhooks/wh_abc123/test \
+curl -X POST https://api.peeap.com/webhooks/wh_abc123/test \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -118,14 +118,14 @@ ngrok http 3000
 ### List Webhooks
 
 ```bash
-curl https://api.paymentsystem.com/v1/webhooks \
+curl https://api.peeap.com/webhooks \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 ### Update Webhook
 
 ```bash
-curl -X PATCH https://api.paymentsystem.com/v1/webhooks/wh_abc123 \
+curl -X PATCH https://api.peeap.com/webhooks/wh_abc123 \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -136,6 +136,6 @@ curl -X PATCH https://api.paymentsystem.com/v1/webhooks/wh_abc123 \
 ### Delete Webhook
 
 ```bash
-curl -X DELETE https://api.paymentsystem.com/v1/webhooks/wh_abc123 \
+curl -X DELETE https://api.peeap.com/webhooks/wh_abc123 \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```

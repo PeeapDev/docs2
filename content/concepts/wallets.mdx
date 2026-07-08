@@ -15,7 +15,7 @@ Wallets are digital containers that hold user funds. Each wallet is associated w
   "externalId": "wal_1234567890",
   "ownerId": "usr_xyz789",
   "ownerType": "USER",
-  "currencyCode": "USD",
+  "currencyCode": "SLE",
   "availableBalance": 1000.00,
   "heldBalance": 50.00,
   "status": "ACTIVE",
@@ -58,25 +58,25 @@ Wallets support configurable limits:
 ### Create a Wallet
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/wallets \
+curl -X POST https://api.peeap.com/wallets \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "currencyCode": "USD"
+    "currencyCode": "SLE"
   }'
 ```
 
 ### Get Wallet Balance
 
 ```bash
-curl https://api.paymentsystem.com/v1/wallets/wal_abc123 \
+curl https://api.peeap.com/wallets/wal_abc123 \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 ### Deposit Funds
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/wallets/wal_abc123/deposit \
+curl -X POST https://api.peeap.com/wallets/wal_abc123/deposit \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -89,7 +89,7 @@ curl -X POST https://api.paymentsystem.com/v1/wallets/wal_abc123/deposit \
 ### Transfer Between Wallets
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/wallets/wal_abc123/transfer \
+curl -X POST https://api.peeap.com/wallets/wal_abc123/transfer \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -101,13 +101,15 @@ curl -X POST https://api.paymentsystem.com/v1/wallets/wal_abc123/transfer \
 
 ## Multi-Currency Support
 
-Users can have multiple wallets in different currencies:
+Peeap settles in **SLE (Sierra Leonean Leone)** — the canonical currency for all mobile-money top-ups and payouts. Users can also hold a USD wallet where enabled:
 
-- USD (US Dollar)
-- EUR (Euro)
-- GBP (British Pound)
-- Additional currencies based on configuration
+- **SLE (Sierra Leonean Leone)** — default settlement currency
+- USD (US Dollar) — requires a USD-enabled account
+
+<Note>
+  The older `NLE` / `SLL` codes are display aliases only. Always send `SLE` as the currency code.
+</Note>
 
 <Warning>
-  Currency conversion between wallets may incur FX fees. Check current rates before converting.
+  Currency conversion between SLE and USD wallets may incur FX fees. Check current rates before converting.
 </Warning>

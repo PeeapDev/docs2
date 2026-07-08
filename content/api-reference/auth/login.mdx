@@ -25,7 +25,7 @@ POST /auth/login
 ## Example Request
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/auth/login \
+curl -X POST https://api.peeap.com/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",
@@ -71,7 +71,7 @@ If MFA is enabled for the account:
 Submit the MFA code to complete login:
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/auth/login \
+curl -X POST https://api.peeap.com/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",

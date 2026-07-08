@@ -26,13 +26,13 @@ from paymentsystem import PaymentSystem
 
 # Initialize the client
 client = PaymentSystem(
-    base_url='https://api.paymentsystem.com/v1',
+    base_url='https://api.peeap.com',
     access_token='your-access-token',
     refresh_token='your-refresh-token'
 )
 
 # Create a wallet
-wallet = client.wallets.create(currency_code='USD')
+wallet = client.wallets.create(currency_code='SLE')
 print(wallet.id)  # wal_abc123
 ```
 
@@ -41,7 +41,7 @@ print(wallet.id)  # wal_abc123
 ```python
 client = PaymentSystem(
     # Required
-    base_url='https://api.paymentsystem.com/v1',
+    base_url='https://api.peeap.com',
 
     # Authentication (at least one required)
     access_token='your-access-token',
@@ -96,7 +96,7 @@ new_tokens = client.auth.refresh()
 ### Create Wallet
 
 ```python
-wallet = client.wallets.create(currency_code='USD')
+wallet = client.wallets.create(currency_code='SLE')
 ```
 
 ### List Wallets
@@ -231,11 +231,11 @@ from paymentsystem import AsyncPaymentSystem
 
 async def main():
     client = AsyncPaymentSystem(
-        base_url='https://api.paymentsystem.com/v1',
+        base_url='https://api.peeap.com',
         access_token='your-access-token'
     )
 
-    wallet = await client.wallets.create(currency_code='USD')
+    wallet = await client.wallets.create(currency_code='SLE')
     print(wallet.id)
 
 asyncio.run(main())

@@ -12,7 +12,7 @@ The Payment System API is organized around REST. Our API accepts JSON-encoded re
 All API requests should be made to:
 
 ```
-https://api.paymentsystem.com/v1
+https://api.peeap.com
 ```
 
 For local development:
@@ -26,7 +26,7 @@ http://localhost:3000/api/v1
 All API endpoints (except registration and login) require authentication using a Bearer token:
 
 ```bash
-curl https://api.paymentsystem.com/v1/users/me \
+curl https://api.peeap.com/users/me \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
@@ -49,11 +49,11 @@ See [Authentication](/authentication) for details on obtaining tokens.
 For POST, PUT, and PATCH requests, send a JSON body:
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/wallets \
+curl -X POST https://api.peeap.com/wallets \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "currencyCode": "USD"
+    "currencyCode": "SLE"
   }'
 ```
 
@@ -64,7 +64,7 @@ All responses are returned in JSON format:
 ```json
 {
   "id": "wal_abc123",
-  "currencyCode": "USD",
+  "currencyCode": "SLE",
   "availableBalance": 0,
   "status": "ACTIVE",
   "createdAt": "2024-01-15T10:30:00Z"
@@ -76,7 +76,7 @@ All responses are returned in JSON format:
 List endpoints support pagination:
 
 ```bash
-curl "https://api.paymentsystem.com/v1/transactions?page=1&limit=20" \
+curl "https://api.peeap.com/transactions?page=1&limit=20" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -149,7 +149,7 @@ X-RateLimit-Reset: 1705312200
 For POST requests that create resources, you can include an `Idempotency-Key` header to prevent duplicate operations:
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/transactions/authorize \
+curl -X POST https://api.peeap.com/transactions/authorize \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Idempotency-Key: unique-request-123" \
   -H "Content-Type: application/json" \

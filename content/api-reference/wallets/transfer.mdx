@@ -39,7 +39,7 @@ POST /wallets/{walletId}/transfer
 ## Example Request
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/wallets/wal_abc123/transfer \
+curl -X POST https://api.peeap.com/wallets/wal_abc123/transfer \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: transfer-123456" \
@@ -66,7 +66,7 @@ curl -X POST https://api.paymentsystem.com/v1/wallets/wal_abc123/transfer \
     "id": "wal_def456"
   },
   "amount": 50.00,
-  "currency": "USD",
+  "currency": "SLE",
   "description": "Payment for services",
   "status": "COMPLETED",
   "createdAt": "2024-01-15T10:30:00Z"

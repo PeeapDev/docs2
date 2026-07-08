@@ -36,14 +36,14 @@ GET /transactions
 ## Example Request
 
 ```bash
-curl https://api.paymentsystem.com/v1/transactions \
+curl https://api.peeap.com/transactions \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
 ### With Filters
 
 ```bash
-curl "https://api.paymentsystem.com/v1/transactions?walletId=wal_abc123&type=PURCHASE&startDate=2024-01-01" \
+curl "https://api.peeap.com/transactions?walletId=wal_abc123&type=PURCHASE&startDate=2024-01-01" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
@@ -60,7 +60,7 @@ curl "https://api.paymentsystem.com/v1/transactions?walletId=wal_abc123&type=PUR
       "type": "PURCHASE",
       "status": "CAPTURED",
       "amount": 99.99,
-      "currency": "USD",
+      "currency": "SLE",
       "cardId": "crd_xyz789",
       "walletId": "wal_def456",
       "merchant": {

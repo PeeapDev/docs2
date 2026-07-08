@@ -60,7 +60,7 @@ sequenceDiagram
   "type": "PURCHASE",
   "status": "CAPTURED",
   "amount": 99.99,
-  "currency": "USD",
+  "currency": "SLE",
   "cardId": "crd_xyz789",
   "walletId": "wal_def456",
   "merchant": {
@@ -84,13 +84,13 @@ sequenceDiagram
 Place a hold without capturing funds:
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/transactions/authorize \
+curl -X POST https://api.peeap.com/transactions/authorize \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "cardId": "crd_abc123",
     "amount": 100.00,
-    "currency": "USD",
+    "currency": "SLE",
     "merchantId": "mch_xyz789"
   }'
 ```
@@ -100,7 +100,7 @@ curl -X POST https://api.paymentsystem.com/v1/transactions/authorize \
 Complete a previously authorized transaction:
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/transactions/txn_abc123/capture \
+curl -X POST https://api.peeap.com/transactions/txn_abc123/capture \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -117,7 +117,7 @@ curl -X POST https://api.paymentsystem.com/v1/transactions/txn_abc123/capture \
 Cancel an authorization before capture:
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/transactions/txn_abc123/void \
+curl -X POST https://api.peeap.com/transactions/txn_abc123/void \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -126,7 +126,7 @@ curl -X POST https://api.paymentsystem.com/v1/transactions/txn_abc123/void \
 ### Full Refund
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/transactions/txn_abc123/refund \
+curl -X POST https://api.peeap.com/transactions/txn_abc123/refund \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -137,7 +137,7 @@ curl -X POST https://api.paymentsystem.com/v1/transactions/txn_abc123/refund \
 ### Partial Refund
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/transactions/txn_abc123/refund \
+curl -X POST https://api.peeap.com/transactions/txn_abc123/refund \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -165,7 +165,7 @@ curl -X POST https://api.paymentsystem.com/v1/transactions/txn_abc123/refund \
 All transaction endpoints support idempotency keys to prevent duplicate transactions:
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/transactions/authorize \
+curl -X POST https://api.peeap.com/transactions/authorize \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Idempotency-Key: unique-request-id-123" \
   -H "Content-Type: application/json" \

@@ -40,7 +40,7 @@ POST /transactions/{transactionId}/refund
 ### Full Refund
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/transactions/txn_abc123/refund \
+curl -X POST https://api.peeap.com/transactions/txn_abc123/refund \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: refund-123456" \
@@ -52,7 +52,7 @@ curl -X POST https://api.paymentsystem.com/v1/transactions/txn_abc123/refund \
 ### Partial Refund
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/transactions/txn_abc123/refund \
+curl -X POST https://api.peeap.com/transactions/txn_abc123/refund \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: refund-789012" \
@@ -73,7 +73,7 @@ curl -X POST https://api.paymentsystem.com/v1/transactions/txn_abc123/refund \
   "type": "REFUND",
   "status": "PENDING",
   "amount": 25.00,
-  "currency": "USD",
+  "currency": "SLE",
   "reason": "Partial return",
   "walletId": "wal_def456",
   "createdAt": "2024-01-15T10:30:00Z"

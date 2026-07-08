@@ -32,7 +32,7 @@ Payment System includes built-in KYC verification to comply with financial regul
 ### Step 1: Submit Application
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/kyc/submit \
+curl -X POST https://api.peeap.com/kyc/submit \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -57,7 +57,7 @@ curl -X POST https://api.paymentsystem.com/v1/kyc/submit \
 ### Step 2: Upload Documents
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/kyc/documents \
+curl -X POST https://api.peeap.com/kyc/documents \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -F "type=PASSPORT" \
   -F "side=FRONT" \
@@ -77,7 +77,7 @@ Required documents:
 ### Step 3: Check Status
 
 ```bash
-curl https://api.paymentsystem.com/v1/kyc/status \
+curl https://api.peeap.com/kyc/status \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -127,7 +127,7 @@ curl https://api.paymentsystem.com/v1/kyc/status \
 If rejected, users can resubmit with corrected information:
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/kyc/resubmit \
+curl -X POST https://api.peeap.com/kyc/resubmit \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{

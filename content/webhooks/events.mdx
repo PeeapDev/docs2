@@ -23,7 +23,7 @@ Sent when a transaction is authorized (funds held).
     "type": "AUTHORIZATION",
     "status": "AUTHORIZED",
     "amount": 99.99,
-    "currency": "USD",
+    "currency": "SLE",
     "cardId": "crd_def456",
     "walletId": "wal_ghi789",
     "merchant": {
@@ -51,7 +51,7 @@ Sent when a transaction is captured/completed.
     "type": "CAPTURE",
     "status": "CAPTURED",
     "amount": 99.99,
-    "currency": "USD",
+    "currency": "SLE",
     "cardId": "crd_def456",
     "walletId": "wal_ghi789",
     "merchant": {
@@ -76,7 +76,7 @@ Sent when a transaction is declined.
     "type": "PURCHASE",
     "status": "DECLINED",
     "amount": 500.00,
-    "currency": "USD",
+    "currency": "SLE",
     "cardId": "crd_def456",
     "declineReason": "INSUFFICIENT_FUNDS",
     "responseCode": "51"
@@ -99,7 +99,7 @@ Sent when a transaction is refunded.
     "type": "REFUND",
     "status": "COMPLETED",
     "amount": 25.00,
-    "currency": "USD",
+    "currency": "SLE",
     "reason": "Partial return"
   }
 }
@@ -192,7 +192,7 @@ Sent when a new wallet is created.
   "createdAt": "2024-01-15T10:30:00Z",
   "data": {
     "id": "wal_new123",
-    "currencyCode": "USD",
+    "currencyCode": "SLE",
     "status": "ACTIVE",
     "ownerId": "usr_abc123",
     "ownerType": "USER"
@@ -229,7 +229,7 @@ Sent when wallet balance falls below threshold.
   "createdAt": "2024-01-15T10:30:00Z",
   "data": {
     "id": "wal_abc123",
-    "currencyCode": "USD",
+    "currencyCode": "SLE",
     "availableBalance": 25.00,
     "threshold": 50.00
   }
@@ -298,7 +298,7 @@ Sent when KYC verification is rejected.
 When registering a webhook, specify which events to receive:
 
 ```bash
-curl -X POST https://api.paymentsystem.com/v1/webhooks \
+curl -X POST https://api.peeap.com/webhooks \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{

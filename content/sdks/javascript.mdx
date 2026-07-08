@@ -30,14 +30,14 @@ import { PaymentSystem } from '@paymentsystem/sdk';
 
 // Initialize the client
 const client = new PaymentSystem({
-  baseUrl: 'https://api.paymentsystem.com/v1',
+  baseUrl: 'https://api.peeap.com',
   accessToken: 'your-access-token',
   refreshToken: 'your-refresh-token'
 });
 
 // Create a wallet
 const wallet = await client.wallets.create({
-  currencyCode: 'USD'
+  currencyCode: 'SLE'
 });
 
 console.log(wallet.id); // wal_abc123
@@ -48,7 +48,7 @@ console.log(wallet.id); // wal_abc123
 ```typescript
 const client = new PaymentSystem({
   // Required
-  baseUrl: 'https://api.paymentsystem.com/v1',
+  baseUrl: 'https://api.peeap.com',
 
   // Authentication (at least one required)
   accessToken: 'your-access-token',
@@ -105,7 +105,7 @@ const newTokens = await client.auth.refresh();
 
 ```typescript
 const wallet = await client.wallets.create({
-  currencyCode: 'USD'
+  currencyCode: 'SLE'
 });
 ```
 
@@ -241,7 +241,7 @@ import type {
 } from '@paymentsystem/sdk';
 
 const request: CreateWalletRequest = {
-  currencyCode: 'USD'
+  currencyCode: 'SLE'
 };
 
 const wallet: Wallet = await client.wallets.create(request);
