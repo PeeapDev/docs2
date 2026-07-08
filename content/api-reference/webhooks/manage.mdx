@@ -1,0 +1,97 @@
+---
+title: Webhooks
+description: "Register endpoints to receive payment and payout events"
+---
+
+# Webhooks
+
+Register HTTPS endpoints to receive events when payments and payouts complete.
+Webhooks are managed with your [secret API key](/api-reference/auth/api-keys).
+
+## Events
+
+| Event | Fires when |
+|-------|-----------|
+| `payment.completed` | An incoming payment settles |
+| `payout.completed` | A payout reaches its destination |
+| `payout.failed` | A payout fails (funds auto-refunded) |
+
+## Create a webhook
+
+```
+POST /v1/webhooks
+```
+
+### Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `url` | string | Yes | Must be `https://…` |
+| `events` | string[] | No | Subset of the events above; defaults to all three |
+
+### Example
+
+```bash
+curl -X POST https://api.peeap.com/v1/webhooks \
+  -H "Authorization: Bearer sk_live_YOUR_SECRET_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "url": "https://example.com/hooks/peeap", "events": ["payment.completed"] }'
+```
+
+### Response (201)
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "wh_01H...",
+    "url": "https://example.com/hooks/peeap",
+    "events": ["payment.completed"],
+    "created_at": "2026-07-08T10:00:00.000Z",
+    "secret": "whsec_3f9a...e1"
+  }
+}
+```
+
+<Warning>
+The `secret` is returned **once, at creation**. Store it now — use it to verify
+the signature on incoming webhook deliveries. It is never shown again.
+</Warning>
+
+## List webhooks
+
+```
+GET /v1/webhooks
+```
+
+Returns your webhooks (secrets omitted), newest first.
+
+```json
+{
+  "success": true,
+  "data": [
+    { "id": "wh_01H...", "url": "https://example.com/hooks/peeap", "events": ["payment.completed", "payout.completed", "payout.failed"], "is_active": true, "created_at": "2026-07-05T09:00:00.000Z" }
+  ]
+}
+```
+
+## Delete a webhook
+
+```
+DELETE /v1/webhooks/{id}
+```
+
+Soft-deletes (deactivates) the webhook. Scoped to your account.
+
+```json
+{ "success": true, "data": { "id": "wh_01H...", "deleted": true } }
+```
+
+### Errors
+
+| Status | `code` | Meaning |
+|--------|--------|---------|
+| 400 | `INVALID_URL` | `url` must be a valid `https` URL |
+| 400 | `INVALID_EVENTS` | `events` must be a subset of the supported list |
+| 401 | `UNAUTHORIZED` | Invalid or missing secret key |
+| 404 | `NOT_FOUND` | Webhook not found (on delete) |

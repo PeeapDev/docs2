@@ -1,0 +1,55 @@
+---
+title: Get Verification
+api: GET /verify/status
+description: "Poll a verification and read the masked account name"
+---
+
+# Get Verification
+
+Poll a verification session started with
+[Create Verification](/api-reference/verify/create). Once the user has dialed the
+code, the status flips to `verified` and the response reveals the **masked**
+mobile-money account name.
+
+## Query Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | string | Yes | The `sessionId` from Create Verification |
+
+## Example Request
+
+```bash
+curl "https://api.peeap.com/verify/status?id=otp_9f2c8b1a"
+```
+
+## Responses (200)
+
+Still waiting:
+
+```json
+{ "status": "pending", "verified": false }
+```
+
+Verified:
+
+```json
+{
+  "status": "verified",
+  "verified": true,
+  "name_masked": "mohamed*****ia",
+  "provider": "Orange Money"
+}
+```
+
+<Note>
+The account name is deliberately **masked** (`mohamed*****ia`) — enough to confirm
+a match against a name the user typed, without exposing the full name.
+</Note>
+
+## Errors
+
+| Status | `error` | Meaning |
+|--------|---------|---------|
+| 400 | `id_required` | Missing `id` query param |
+| 502 | `verify_unavailable` | Provider temporarily unavailable |

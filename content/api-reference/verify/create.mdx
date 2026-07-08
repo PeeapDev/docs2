@@ -1,0 +1,48 @@
+---
+title: Create Verification
+api: POST /verify/create
+description: "Start a dial-to-verify phone check and get a USSD dial code"
+---
+
+# Create Verification
+
+Start a phone-ownership check. Peeap returns a **USSD dial code**; the user dials
+it from the number being verified. There's no SMS — possession is proven by
+dialing from the SIM. Poll [Get Verification](/api-reference/verify/status) for
+the result and the masked account name.
+
+## Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `phone` | string | Yes | The phone number to verify (Sierra Leone; reduced to its 8-digit core) |
+
+## Example Request
+
+```bash
+curl -X POST https://api.peeap.com/verify/create \
+  -H "Content-Type: application/json" \
+  -d '{ "phone": "076000000" }'
+```
+
+## Success Response (200)
+
+```json
+{
+  "sessionId": "otp_9f2c8b1a",
+  "dialCode": "*715*12345#",
+  "status": "pending",
+  "expireTime": "2026-07-08T12:34:56Z"
+}
+```
+
+Show the user the `dialCode` and ask them to dial it from the number being
+verified, then poll [`/verify/status?id={sessionId}`](/api-reference/verify/status).
+
+## Errors
+
+| Status | `error` | Meaning |
+|--------|---------|---------|
+| 400 | `invalid_phone` | Not a valid Sierra Leone number |
+| 429 | — | Rate limited (5/hr per phone, 60/hr per IP) |
+| 502 | `verify_unavailable` | Provider temporarily unavailable |

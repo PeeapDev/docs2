@@ -1,0 +1,61 @@
+---
+title: Generate USSD Code
+api: POST /checkout/generate-ussd
+description: "Generate a dial-able mobile-money USSD payment code"
+---
+
+# Generate USSD Code
+
+Generate a mobile-money **USSD code** (e.g. `*715*123456#`) the customer dials to
+pay. Useful when you render your own checkout UI instead of the hosted page.
+
+## Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `amount` | number | Yes | Amount, greater than 0 |
+| `currency` | string | No | Defaults to `SLE` |
+| `description` | string | No | Shown as the payment code name |
+| `merchantName` | string | No | Display name |
+| `sessionId` | string | No | Links this code to an existing checkout session |
+| `provider` | string | No | `m17` (Orange Money) or `m18` (Afrimoney); default `m17` |
+| `phoneNumber` | string | No | 8-digit number — binds the code to that number and returns the resolved account name |
+
+## Example Request
+
+```bash
+curl -X POST https://api.peeap.com/checkout/generate-ussd \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 2500,
+    "currency": "SLE",
+    "description": "Order #1001",
+    "provider": "m17",
+    "phoneNumber": "76000000"
+  }'
+```
+
+## Success Response (200)
+
+```json
+{
+  "paymentCodeId": "pmc-xxxx",
+  "ussdCode": "*715*123456#",
+  "amount": { "currency": "SLE", "value": 2500 },
+  "expiresAt": "2026-07-08T12:40:00.000Z",
+  "status": "pending",
+  "accountName": "Mohamed K",
+  "resolvedProvider": "m17",
+  "targetedNumber": "+23276000000"
+}
+```
+
+`accountName`, `resolvedProvider`, and `targetedNumber` are `null` when no
+`phoneNumber` is supplied.
+
+## Errors
+
+| Status | Meaning |
+|--------|---------|
+| 400 | `Valid amount is required` / `invalid_phone` / `account_not_found` |
+| 503 | `PAYMENT_CODE_ERROR` — provider temporarily unavailable |

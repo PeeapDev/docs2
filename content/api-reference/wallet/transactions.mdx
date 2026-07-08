@@ -1,0 +1,65 @@
+---
+title: List Transactions
+api: GET /v1/transactions
+description: "List transactions across your account's wallets"
+---
+
+# List Transactions
+
+Returns transactions across all wallets owned by your account, newest first.
+
+## Auth
+
+`Authorization: Bearer sk_live_…` (or `sk_test_…`). See [Authentication](/api-reference/auth/api-keys).
+
+## Query Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `page` | integer | No | Page number (default 1) |
+| `limit` | integer | No | Items per page (default 20, max 100) |
+
+## Example Request
+
+```bash
+curl "https://api.peeap.com/v1/transactions?page=1&limit=20" \
+  -H "Authorization: Bearer sk_live_YOUR_SECRET_KEY"
+```
+
+## Success Response (200)
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "9a1e0b7c-...",
+      "wallet_id": "b3f1c2a0-...",
+      "type": "TRANSFER",
+      "amount": 5000,
+      "currency": "SLE",
+      "status": "COMPLETED",
+      "reference": "TRF-1720430000000",
+      "description": "Transfer received",
+      "created_at": "2026-07-07T18:22:10.000Z"
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "limit": 20,
+    "total": 137,
+    "total_pages": 7,
+    "has_next_page": true,
+    "has_previous_page": false
+  },
+  "timestamp": "2026-07-08T10:00:00.000Z"
+}
+```
+
+## Errors
+
+| Status | `code` | Meaning |
+|--------|--------|---------|
+| 401 | `UNAUTHORIZED` | Invalid or missing secret key |
+| 405 | `METHOD_NOT_ALLOWED` | Use `GET` |
+| 500 | `DATABASE_ERROR` | Server error |

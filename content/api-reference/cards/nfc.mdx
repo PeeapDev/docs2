@@ -1,0 +1,66 @@
+---
+title: NFC Provisioning
+description: "Bind and stock NFC chips (service / admin only)"
+---
+
+# NFC Provisioning
+
+Program a tapped NFC UID onto a card, or stock blank chips for later activation.
+These are **privileged** operations — used by the card-issuance tooling, not by
+third-party integrators.
+
+## Auth
+
+Either an `x-service-secret: <SERVICE_SECRET>` header, **or** an authenticated
+`admin` / `superadmin` session.
+
+## Link / program an NFC UID
+
+```
+POST /nfc/link
+```
+
+Binds a physical chip UID to an existing card, or links it to a user's wallet.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `nfc_uid` | string | Yes | The tapped chip UID (uppercased) |
+| `cardId` / `cardNumber` | string | one of* | Program the UID onto an existing card |
+| `userId` / `phone` / `email` | string | one of* | Link the chip to a user's wallet |
+| `walletId` | string | No | Target wallet (defaults to the user's primary) |
+| `label` | string | No | Label for a wallet link |
+
+\*At least one of `cardId`, `cardNumber`, `userId`, `phone`, or `email` is required.
+
+```json
+{ "success": true, "mode": "card", "uid": "04A2B3C4D5", "cardId": "card_…", "cardNumber": "5399…", "userId": "usr_…" }
+```
+
+Returns `409 This NFC chip is already programmed to another card` if the UID is
+already bound.
+
+## Stock a blank chip
+
+```
+POST /nfc/stock
+```
+
+Registers a blank chip and mints an activation code + QR for it.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `nfc_uid` | string | Yes | The chip UID |
+| `batch` | string | No | Batch label |
+
+```json
+{
+  "success": true,
+  "stockId": "stock_…",
+  "nfc_uid": "04A2B3C4D5",
+  "activationCode": "ABCD-2345",
+  "activationUrl": "https://my.peeap.com/activate/ABCD-2345",
+  "qr": "https://my.peeap.com/card/ABCD-2345"
+}
+```
+
+The end user then claims it with [Activate a Card](/api-reference/cards/activate).

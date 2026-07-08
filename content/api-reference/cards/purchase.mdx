@@ -1,0 +1,66 @@
+---
+title: Purchase a Card
+api: POST /cards/purchase
+description: "Issue a card by charging the buyer's wallet"
+---
+
+# Purchase a Card
+
+Issues a new card for a user by debiting their **primary wallet** for the product
+price. This is how cards come into existence — there is no separate "create card"
+call. The full card number is returned **once**, in this response.
+
+## Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `userId` | string | Yes | Buyer whose wallet is charged |
+| `cardProductId` | string | Yes | Product id from [List Card Products](/api-reference/cards/products) |
+| `paymentMethod` | string | No | Defaults to `wallet` |
+
+## Example Request
+
+```bash
+curl -X POST https://api.peeap.com/cards/purchase \
+  -H "Content-Type: application/json" \
+  -d '{ "userId": "usr_abc123", "cardProductId": "prod_std" }'
+```
+
+## Success Response (200)
+
+```json
+{
+  "success": true,
+  "card": {
+    "id": "card_9f2c8b1a",
+    "card_number": "5399xxxxxxxxxxxx",
+    "last_four": "1234",
+    "expiry_month": 7,
+    "expiry_year": 2031,
+    "product_name": "Standard",
+    "status": "ACTIVE"
+  }
+}
+```
+
+<Warning>
+`card_number` is returned only in this response. Store or display it immediately —
+there is no endpoint that re-reveals the full PAN.
+</Warning>
+
+## Errors
+
+| Status | Message |
+|--------|---------|
+| 400 | `userId and cardProductId are required` / `Out of stock` / `You already own this card type` |
+| 400 | `Insufficient balance` (includes `required` and `available`) |
+| 404 | `Product not found` / `Wallet not found` |
+
+## List a user's cards
+
+```
+GET /cards/user/{userId}
+```
+
+Returns `{ "cards": [ … ], "total": N }` with each card and its product. (There is
+no "get a single card by id" endpoint.)

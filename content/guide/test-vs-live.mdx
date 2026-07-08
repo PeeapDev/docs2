@@ -78,10 +78,10 @@ A simple setup that keeps you safe:
 
 ```bash
 # .env on your development machine
-PEEAP_PUBLIC_KEY=pk_test_xxxxxxxxxxxxx
+PEEAP_PUBLIC_KEY=pk_test_YOUR_TEST_PUBLISHABLE_KEY
 
 # .env in production (set in your host's dashboard, never committed)
-PEEAP_PUBLIC_KEY=pk_live_xxxxxxxxxxxxx
+PEEAP_PUBLIC_KEY=pk_live_YOUR_PUBLISHABLE_KEY
 ```
 
 Your code reads `process.env.PEEAP_PUBLIC_KEY` and never knows or cares which mode

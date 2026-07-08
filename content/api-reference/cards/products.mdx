@@ -1,0 +1,48 @@
+---
+title: List Card Products
+api: GET /card-products
+description: "List the card tiers a user can purchase"
+---
+
+# List Card Products
+
+Returns the catalogue of card products (tiers) a user can buy — each with its
+price, limits, and enabled features. Use a product's `id` with
+[Purchase a Card](/api-reference/cards/purchase).
+
+## Example Request
+
+```bash
+curl https://api.peeap.com/card-products
+```
+
+Add `?admin=true` to include inactive/hidden products (admin views only).
+
+## Success Response (200)
+
+```json
+{
+  "products": [
+    {
+      "id": "prod_std",
+      "code": "STD",
+      "name": "Standard",
+      "tier": 1,
+      "purchase_price": 50,
+      "annual_fee": 0,
+      "currency": "SLE",
+      "bin_prefix": "5399",
+      "daily_transaction_limit": 5000,
+      "monthly_transaction_limit": 50000,
+      "is_contactless_enabled": true,
+      "is_active": true
+    }
+  ],
+  "total": 3
+}
+```
+
+<Note>
+Card limits are set from the product at purchase time. Prices and limits are in
+**SLE**.
+</Note>

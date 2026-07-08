@@ -1,0 +1,85 @@
+---
+title: Create Checkout
+api: POST /checkout/create
+description: "Create a hosted checkout session and get a payment URL"
+---
+
+# Create Checkout
+
+Create a hosted checkout session and redirect your customer to the returned
+`paymentUrl` to pay by mobile money, card, or QR.
+
+## Auth
+
+Send your **publishable key** in the body (`pk_live_…` / `pk_test_…`). Unlike
+secret keys, the publishable key is safe to use from a server that builds a
+checkout link.
+
+## Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `amount` | number | Yes | Amount, greater than 0 |
+| `publicKey` | string | Yes | Your `pk_live_…` / `pk_test_…` key |
+| `currency` | string | No | Defaults to `SLE` |
+| `reference` | string | No | Your order reference (stored in metadata) |
+| `idempotencyKey` | string | No | Returns the existing session if it matches |
+| `description` | string | No | Shown on the checkout page |
+| `customerEmail` | string | No | Prefills / receipts |
+| `customerPhone` | string | No | Prefills mobile-money |
+| `redirectUrl` | string | No | Where to send the customer after payment (localhost rejected in live mode) |
+| `metadata` | object | No | Arbitrary key/values echoed back to you |
+
+## Example Request
+
+```bash
+curl -X POST https://api.peeap.com/checkout/create \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 250,
+    "publicKey": "pk_live_YOUR_PUBLISHABLE_KEY",
+    "currency": "SLE",
+    "reference": "ORD-1001",
+    "description": "Order #1001",
+    "redirectUrl": "https://example.com/thanks"
+  }'
+```
+
+## Success Response (200)
+
+```json
+{
+  "paymentId": "cs_ab12cd34ef56",
+  "sessionId": "cs_ab12cd34ef56",
+  "paymentUrl": "https://checkout.peeap.com/popup.html?session=cs_ab12cd34ef56",
+  "expiresAt": "2026-07-08T12:10:00.000Z",
+  "amount": 250,
+  "currency": "SLE",
+  "businessName": "Acme Store",
+  "isTestMode": false
+}
+```
+
+Redirect the customer to `paymentUrl`. When they finish, confirm the payment via
+[webhook](/api-reference/webhooks/manage) (`payment.completed`) — don't rely on
+the browser redirect alone.
+
+## Errors
+
+| Status | Message |
+|--------|---------|
+| 400 | `Valid amount is required` / `Invalid public key format. Must start with pk_live_ or pk_test_` |
+| 401 | `Invalid public key or business not active` |
+| 403 | Business rejected / suspended / trial limit reached |
+| 404 | `Merchant business not found` |
+
+## Peer-to-peer sessions
+
+For wallet-to-wallet collection (no merchant account), use
+`POST /checkout/sessions` with `recipientId` instead of `merchantId`. It returns
+`{ sessionId, url, expiresAt }`.
+
+## Mobile-money USSD code
+
+To generate a dial-able USSD payment code inside your own UI (instead of the
+hosted page), see [Generate USSD Code](/api-reference/checkout/ussd).

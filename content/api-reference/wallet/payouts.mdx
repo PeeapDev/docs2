@@ -1,0 +1,90 @@
+---
+title: Create Payout
+api: POST /v1/payouts
+description: "Send money out to a mobile-money or bank account"
+---
+
+# Create Payout
+
+Send money from your Peeap balance to a **mobile-money** or **bank** account.
+Payouts are the money-out rail — they debit your wallet atomically, then settle
+to the destination via Monime.
+
+## Auth
+
+`Authorization: Bearer sk_live_…` (or `sk_test_…`). See [Authentication](/api-reference/auth/api-keys).
+
+## Required header
+
+| Header | Value |
+|--------|-------|
+| `Idempotency-Key` | A unique string per payout. **Required** — it guarantees a retried request never sends money twice. |
+
+## Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `amount` | number | Yes | Amount in SLE |
+| `currency` | string | No | Defaults to `SLE` |
+| `description` | string | No | Statement note |
+| `pin` | string | Conditional | Required when the amount crosses the high-value 2FA threshold |
+| `destination.type` | string | Yes | `momo` or `bank` |
+| `destination.provider_id` | string | Yes | Provider id (e.g. Orange Money, or a bank from [`/payouts/banks`](/api-reference/wallet/payouts#bank-provider-ids)) |
+| `destination.account_number` | string | Yes | MoMo number (8 digits) or bank account number |
+| `destination.account_name` | string | No | Beneficiary name |
+
+## Example Request
+
+```bash
+curl -X POST https://api.peeap.com/v1/payouts \
+  -H "Authorization: Bearer sk_live_YOUR_SECRET_KEY" \
+  -H "Idempotency-Key: payout-2026-07-08-0001" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 100,
+    "currency": "SLE",
+    "description": "Vendor settlement",
+    "destination": {
+      "type": "momo",
+      "provider_id": "m17",
+      "account_number": "76000000",
+      "account_name": "Mohamed Kabia"
+    }
+  }'
+```
+
+## Success Response (200)
+
+```json
+{
+  "success": true,
+  "payoutId": "payout_1720430000000",
+  "monimePayoutId": "pyt-xxxx",
+  "status": "PROCESSING",
+  "amount": 100,
+  "fee": 2,
+  "totalDeducted": 102,
+  "destination": { "type": "momo", "provider": "Orange Money", "accountNumber": "+23276000000" }
+}
+```
+
+## Errors
+
+| Status | `code` | Meaning |
+|--------|--------|---------|
+| 400 | `IDEMPOTENCY_REQUIRED` | Missing `Idempotency-Key` header |
+| 401 | `UNAUTHORIZED` | Invalid or missing secret key |
+| 409 | `PAYOUT_IN_PROGRESS` | A payout with this key is already processing |
+| 500 | `PAYOUT_FAILED` | Could not complete — check status; retry with a **new** key |
+
+<Warning>
+On any downstream rail failure the debit is **auto-refunded** to your wallet.
+Never retry a failed payout with the same `Idempotency-Key` — check the payout
+status first, and use a new key to retry.
+</Warning>
+
+## Bank provider IDs
+
+List supported banks and their `provider_id` values with
+`GET /payouts/banks?country=SL`. Verify a bank account name before sending with
+`GET /payouts/bank/verify?providerId=…&accountNumber=…`.

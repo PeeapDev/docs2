@@ -1,0 +1,85 @@
+---
+title: Authentication
+description: "Authenticate API requests with your secret key"
+---
+
+# Authentication
+
+The Peeap API authenticates every request with a **secret API key**. You get a
+test key and a live key from your merchant dashboard.
+
+| Key prefix | Mode | Use |
+|------------|------|-----|
+| `sk_test_…` | Test | Sandbox — no real money moves |
+| `sk_live_…` | Live | Production — real settlement in SLE |
+
+Send the key as a Bearer token on every request:
+
+```bash
+curl https://api.peeap.com/v1/balance \
+  -H "Authorization: Bearer sk_live_YOUR_SECRET_KEY"
+```
+
+<Warning>
+Secret keys move money. Never expose them in browser code, mobile apps, or
+public repositories. Publishable keys (`pk_…`) are **not** accepted on the API —
+only secret keys can read balances or create payouts.
+</Warning>
+
+## Base URL
+
+```
+https://api.peeap.com
+```
+
+All amounts are in **SLE** (Sierra Leonean Leone), the platform settlement
+currency. See [wallets & currency](/concepts/wallets).
+
+## Response envelope
+
+Every response uses a consistent envelope.
+
+**Success:**
+
+```json
+{
+  "success": true,
+  "data": { "...": "..." },
+  "timestamp": "2026-07-08T10:00:00.000Z"
+}
+```
+
+**Error:**
+
+```json
+{
+  "success": false,
+  "error": { "code": "UNAUTHORIZED", "message": "Invalid or missing secret API key" },
+  "timestamp": "2026-07-08T10:00:00.000Z"
+}
+```
+
+List endpoints add a `meta` block with pagination:
+
+```json
+{
+  "success": true,
+  "data": [ "..." ],
+  "meta": { "page": 1, "limit": 20, "total": 137, "total_pages": 7, "has_next_page": true, "has_previous_page": false }
+}
+```
+
+## Common errors
+
+| Status | `code` | Meaning |
+|--------|--------|---------|
+| 401 | `UNAUTHORIZED` | Missing key, wrong prefix, or the merchant account isn't `ACTIVE` |
+| 405 | `METHOD_NOT_ALLOWED` | Wrong HTTP method for the endpoint |
+| 500 | `DATABASE_ERROR` | Unexpected server error |
+
+## Signing in end users (OAuth)
+
+The secret-key flow above is for **your** account's money. If you're building an
+app that lets **Peeap users** sign in and share their profile or wallet (a
+"Sign in with Peeap" button), use the [OAuth 2.0 flow](/api-reference/auth/oauth)
+instead — that issues per-user access tokens with scopes.

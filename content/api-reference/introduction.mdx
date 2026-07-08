@@ -1,159 +1,80 @@
 ---
 title: API Reference
-description: "Complete API reference for Payment System"
+description: "The Peeap REST API — money, checkout, cards, verification, and schools"
 ---
 
 # API Reference
 
-The Payment System API is organized around REST. Our API accepts JSON-encoded request bodies, returns JSON-encoded responses, and uses standard HTTP response codes and authentication.
+The Peeap API is organized around REST. It accepts JSON request bodies, returns
+JSON responses, and uses standard HTTP status codes. All amounts are in **SLE**
+(Sierra Leonean Leone), the platform settlement currency.
 
 ## Base URL
-
-All API requests should be made to:
 
 ```
 https://api.peeap.com
 ```
 
-For local development:
-
-```
-http://localhost:3000/api/v1
-```
-
 ## Authentication
 
-All API endpoints (except registration and login) require authentication using a Bearer token:
+Peeap uses three credentials, depending on what you're doing:
 
-```bash
-curl https://api.peeap.com/users/me \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
-```
+| Credential | Header | Use |
+|------------|--------|-----|
+| **Secret key** `sk_live_…` / `sk_test_…` | `Authorization: Bearer sk_…` | Your account's money — [balance](/api-reference/wallet/balance), [transactions](/api-reference/wallet/transactions), [payouts](/api-reference/wallet/payouts), [webhooks](/api-reference/webhooks/manage) |
+| **Publishable key** `pk_live_…` / `pk_test_…` | In the request body | [Create a checkout](/api-reference/checkout/create) link |
+| **OAuth access token** | `Authorization: Bearer <token>` | [Sign in with Peeap](/api-reference/auth/oauth) — act on a user's behalf |
 
-See [Authentication](/authentication) for details on obtaining tokens.
+Test keys (`_test_`) run in a sandbox where no real money moves; live keys settle
+for real. See [Authentication](/api-reference/auth/api-keys).
 
-## Request Format
+<Warning>
+Secret keys move money — keep them server-side. Publishable keys (`pk_…`) are the
+only keys safe to expose in a checkout link, and they cannot read balances or
+send payouts.
+</Warning>
 
-### Headers
+## Response envelope
 
-| Header | Required | Description |
-|--------|----------|-------------|
-| `Authorization` | Yes* | Bearer token for authentication |
-| `Content-Type` | Yes | `application/json` for POST/PUT/PATCH |
-| `Idempotency-Key` | No | Unique key to prevent duplicate requests |
-
-*Not required for `/auth/register` and `/auth/login`
-
-### Request Body
-
-For POST, PUT, and PATCH requests, send a JSON body:
-
-```bash
-curl -X POST https://api.peeap.com/wallets \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "currencyCode": "SLE"
-  }'
-```
-
-## Response Format
-
-All responses are returned in JSON format:
+The `/v1/*` money endpoints use a consistent envelope:
 
 ```json
-{
-  "id": "wal_abc123",
-  "currencyCode": "SLE",
-  "availableBalance": 0,
-  "status": "ACTIVE",
-  "createdAt": "2024-01-15T10:30:00Z"
-}
+{ "success": true, "data": { "...": "..." }, "timestamp": "2026-07-08T10:00:00.000Z" }
 ```
-
-### Pagination
-
-List endpoints support pagination:
-
-```bash
-curl "https://api.peeap.com/transactions?page=1&limit=20" \
-  -H "Authorization: Bearer YOUR_TOKEN"
-```
-
-Response includes pagination metadata:
 
 ```json
-{
-  "data": [...],
-  "meta": {
-    "page": 1,
-    "limit": 20,
-    "total": 150,
-    "totalPages": 8
-  }
-}
+{ "success": false, "error": { "code": "UNAUTHORIZED", "message": "…" }, "timestamp": "…" }
 ```
 
-## HTTP Status Codes
-
-| Code | Description |
-|------|-------------|
-| 200 | Success |
-| 201 | Created |
-| 400 | Bad Request - Invalid parameters |
-| 401 | Unauthorized - Invalid or missing token |
-| 403 | Forbidden - Insufficient permissions |
-| 404 | Not Found - Resource doesn't exist |
-| 409 | Conflict - Resource already exists |
-| 422 | Unprocessable Entity - Validation failed |
-| 429 | Too Many Requests - Rate limit exceeded |
-| 500 | Internal Server Error |
-
-## Error Format
-
-Errors are returned with a consistent structure:
+List endpoints add a `meta` block:
 
 ```json
-{
-  "statusCode": 400,
-  "message": "Validation failed",
-  "errors": [
-    {
-      "field": "email",
-      "message": "Invalid email format"
-    }
-  ]
-}
+{ "success": true, "data": [ "..." ],
+  "meta": { "page": 1, "limit": 20, "total": 137, "total_pages": 7, "has_next_page": true, "has_previous_page": false } }
 ```
 
-## Rate Limiting
-
-API requests are rate-limited to ensure fair usage:
-
-| Endpoint Type | Limit |
-|--------------|-------|
-| Authentication | 10 requests/minute |
-| Read operations | 100 requests/minute |
-| Write operations | 30 requests/minute |
-
-Rate limit headers are included in responses:
-
-```
-X-RateLimit-Limit: 100
-X-RateLimit-Remaining: 95
-X-RateLimit-Reset: 1705312200
-```
+<Note>
+Checkout, verify, cards, and school endpoints predate the `/v1` envelope and
+return their fields at the top level (documented per endpoint). When in doubt,
+the shape shown on each endpoint page is the real one.
+</Note>
 
 ## Idempotency
 
-For POST requests that create resources, you can include an `Idempotency-Key` header to prevent duplicate operations:
+Money-moving POSTs accept — and [payouts](/api-reference/wallet/payouts)
+**require** — an `Idempotency-Key` header so a retried request never sends money
+twice.
 
-```bash
-curl -X POST https://api.peeap.com/transactions/authorize \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Idempotency-Key: unique-request-123" \
-  -H "Content-Type: application/json" \
-  -d '{...}'
+```
+Idempotency-Key: payout-2026-07-08-0001
 ```
 
-Requests with the same idempotency key within 24 hours will return the same response.
+## What you can build
+
+- **Accept payments** → [Create Checkout](/api-reference/checkout/create) / [USSD code](/api-reference/checkout/ussd)
+- **Read money** → [Balance](/api-reference/wallet/balance) · [Transactions](/api-reference/wallet/transactions)
+- **Send money** → [Payouts](/api-reference/wallet/payouts)
+- **Get notified** → [Webhooks](/api-reference/webhooks/manage)
+- **Verify a phone** → [Verification API](/api-reference/verify/create)
+- **Charge students** → [School Payments](/api-reference/schools/payments)
+- **Issue cards** → [Card Products](/api-reference/cards/products) · [Purchase](/api-reference/cards/purchase)

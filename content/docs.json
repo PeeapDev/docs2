@@ -82,37 +82,44 @@
           {
             "group": "Authentication",
             "pages": [
-              "api-reference/auth/register",
-              "api-reference/auth/login",
-              "api-reference/auth/refresh",
-              "api-reference/auth/logout"
+              "api-reference/auth/api-keys",
+              "api-reference/auth/oauth"
             ]
           },
           {
-            "group": "Wallets",
+            "group": "Wallet & Money",
             "pages": [
-              "api-reference/wallets/list",
-              "api-reference/wallets/create",
-              "api-reference/wallets/get",
-              "api-reference/wallets/transfer"
+              "api-reference/wallet/balance",
+              "api-reference/wallet/transactions",
+              "api-reference/wallet/payouts"
+            ]
+          },
+          {
+            "group": "Checkout",
+            "pages": [
+              "api-reference/checkout/create",
+              "api-reference/checkout/ussd"
+            ]
+          },
+          {
+            "group": "Verify",
+            "pages": [
+              "api-reference/verify/create",
+              "api-reference/verify/status"
             ]
           },
           {
             "group": "Cards",
             "pages": [
-              "api-reference/cards/list",
-              "api-reference/cards/create",
+              "api-reference/cards/products",
+              "api-reference/cards/purchase",
               "api-reference/cards/activate",
-              "api-reference/cards/block"
+              "api-reference/cards/nfc"
             ]
           },
           {
-            "group": "Transactions",
-            "pages": [
-              "api-reference/transactions/list",
-              "api-reference/transactions/get",
-              "api-reference/transactions/refund"
-            ]
+            "group": "Webhooks",
+            "pages": ["api-reference/webhooks/manage"]
           },
           {
             "group": "Schools",

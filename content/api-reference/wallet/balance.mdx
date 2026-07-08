@@ -1,0 +1,44 @@
+---
+title: Get Balance
+api: GET /v1/balance
+description: "Retrieve your account's primary wallet balance"
+---
+
+# Get Balance
+
+Returns the balance of your account's **primary** wallet.
+
+## Auth
+
+`Authorization: Bearer sk_live_…` (or `sk_test_…`). See [Authentication](/api-reference/auth/api-keys).
+
+## Example Request
+
+```bash
+curl https://api.peeap.com/v1/balance \
+  -H "Authorization: Bearer sk_live_YOUR_SECRET_KEY"
+```
+
+## Success Response (200)
+
+```json
+{
+  "success": true,
+  "data": {
+    "wallet_id": "b3f1c2a0-7e4d-4c6f-9a12-8d0e2f5a1b3c",
+    "balance": 152340.50,
+    "currency": "SLE",
+    "status": "active"
+  },
+  "timestamp": "2026-07-08T10:00:00.000Z"
+}
+```
+
+## Errors
+
+| Status | `code` | Meaning |
+|--------|--------|---------|
+| 401 | `UNAUTHORIZED` | Invalid or missing secret key |
+| 404 | `NO_WALLET` | No primary wallet exists for this account |
+| 405 | `METHOD_NOT_ALLOWED` | Use `GET` |
+| 500 | `DATABASE_ERROR` | Server error |
