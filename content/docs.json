@@ -19,7 +19,7 @@
         "groups": [
           {
             "group": "Get Started",
-            "pages": ["introduction", "quickstart", "authentication"]
+            "pages": ["introduction", "quickstart", "authentication", "pricing"]
           },
           {
             "group": "Verify API",

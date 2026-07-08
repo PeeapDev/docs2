@@ -1,0 +1,74 @@
+---
+title: Pricing & Economics
+description: "What Peeap charges developers — the core rails are free; we earn at the wallet's edges"
+---
+
+# Pricing & Economics
+
+Peeap is built to help you **grow your platform**. The rails your users touch most
+— collecting fees, moving money between wallets, reading balances — are **free**,
+forever. We make our money at the edges of the wallet, not on the payments your
+users make inside it.
+
+<Note>
+There is **no integration fee, no monthly minimum, and no charge to collect
+money**. If you never move money *out* to a bank, you never pay us.
+</Note>
+
+## What's free
+
+Everything your users do inside the Peeap wallet:
+
+| Capability | Cost |
+|-----------|------|
+| Collect school fees / payments ([initiate](/api-reference/schools/payments) → authorize) | **Free** |
+| Wallet-to-wallet transfers | **Free** |
+| Read [balance](/api-reference/wallet/balance) & [transactions](/api-reference/wallet/transactions) | **Free** |
+| [Checkout](/api-reference/checkout/create) sessions & USSD codes | **Free** |
+| [Webhooks](/api-reference/webhooks/manage) | **Free** |
+| Sign in with Peeap ([OAuth](/api-reference/auth/oauth)) | **Free** |
+
+This is deliberate. The more of your users hold a Peeap balance, the stronger the
+whole network — so we don't tax the thing that grows it.
+
+## What we charge for
+
+Only when money **enters** or **leaves** the wallet ecosystem, or converts into a
+product — never on the payments in between:
+
+| Service | Who pays | Model |
+|---------|----------|-------|
+| **Cash-in** (top-up from mobile money) | The end user (same rate they'd pay any agent) | A spread over the network cost — invisible on your bill |
+| **Cash-out** ([payout](/api-reference/wallet/payouts) to bank / momo) | The end user withdrawing | A spread over the network cost |
+| **Card issuance** ([purchase a card](/api-reference/cards/purchase)) | The end user buying the card | Flat price per card |
+
+Your users pay these at the point they'd pay a fee anyway — cashing out at an
+agent, or buying a card. You never see a line item for collecting fees.
+
+## What you earn — developer revenue share
+
+You're bringing users onto the network, so you share in what they generate. Peeap
+pays you a **share of the cash-out margin** on the users you onboard. The more your
+platform grows real money movement, the more you earn — automatically, settled to
+your merchant account.
+
+<Info>
+Rev-share is set per partner. It turns Peeap from "a payment SDK you pay for" into
+"a rail that pays you back for growth." Talk to us to set your rate.
+</Info>
+
+## The network effect
+
+A Peeap wallet you create for a user isn't locked to your app. It works across
+**every** Peeap-powered platform — your users become reachable by the whole
+ecosystem, and users from other apps can transact in yours. You're not just
+integrating a payment method; you're plugging into a shared wallet graph.
+
+## In one line
+
+> Collecting money is free. We earn a thin spread when money enters or leaves the
+> wallet, and on cards — and we share the cash-out margin back with you for the
+> users you bring.
+
+Ready to build? Start with [Authentication](/api-reference/auth/api-keys) and
+[Create a Checkout](/api-reference/checkout/create).
