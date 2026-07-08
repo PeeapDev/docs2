@@ -1,0 +1,191 @@
+---
+title: Pay with Peeap (React & v0)
+description: "A copy-paste checkout button for React, Next.js, and v0 — real payments, no backend to start"
+---
+
+# Pay with Peeap (React & v0)
+
+Drop this button into any React, Next.js, or [v0](https://v0.dev) project and take
+real payments. It opens the Peeap checkout, and calls your `onSuccess` when the
+customer has paid. It needs only your **publishable key** — no backend required
+to start.
+
+<Info>
+Building on v0? Paste the component into a new file (e.g. `PeeapCheckout.tsx`),
+drop `<PeeapCheckout … />` into your page, and set your publishable key. That's it.
+</Info>
+
+## 1. The component
+
+Copy this into `PeeapCheckout.tsx`:
+
+```tsx
+'use client';
+import { useCallback, useState, type CSSProperties } from 'react';
+
+export type PeeapResult = {
+  paymentId: string;
+  sessionId: string;
+  reference?: string;
+  amount: number;
+  currency: string;
+  method: string;
+  status: string;
+};
+
+export function PeeapCheckout({
+  publicKey,
+  amount,
+  currency = 'SLE',
+  description,
+  reference,
+  customerEmail,
+  customerPhone,
+  label = 'Pay with Peeap',
+  onSuccess,
+  onCancel,
+  onError,
+  className,
+  style,
+}: {
+  publicKey: string;
+  amount: number;
+  currency?: string;
+  description?: string;
+  reference?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  label?: string;
+  onSuccess?: (result: PeeapResult) => void;
+  onCancel?: () => void;
+  onError?: (message: string) => void;
+  className?: string;
+  style?: CSSProperties;
+}) {
+  const [loading, setLoading] = useState(false);
+
+  const pay = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('https://api.peeap.com/checkout/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount, publicKey, currency, description,
+          reference, customerEmail, customerPhone,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.paymentUrl) {
+        throw new Error(data.error || data.message || 'Could not start checkout');
+      }
+
+      // Open the hosted Peeap checkout in a popup.
+      const w = 460, h = 720;
+      const left = window.screenX + (window.outerWidth - w) / 2;
+      const top = window.screenY + (window.outerHeight - h) / 2;
+      const popup = window.open(
+        data.paymentUrl, 'peeap_checkout',
+        `width=${w},height=${h},left=${left},top=${top}`,
+      );
+
+      // Popup blocked → fall back to a full-page redirect.
+      if (!popup) { window.location.href = data.paymentUrl; return; }
+
+      // Only trust messages from the checkout origin.
+      const expectedOrigin = new URL(data.paymentUrl).origin;
+
+      const cleanup = () => {
+        window.removeEventListener('message', onMessage);
+        clearInterval(poll);
+        try { popup.close(); } catch {}
+        setLoading(false);
+      };
+      const onMessage = (e: MessageEvent) => {
+        if (e.origin !== expectedOrigin) return;
+        const d = e.data || {};
+        if (d.type === 'PEEAP_PAYMENT_SUCCESS') { cleanup(); onSuccess?.(d as PeeapResult); }
+        else if (d.type === 'PEEAP_PAYMENT_CANCEL') { cleanup(); onCancel?.(); }
+        else if (d.type === 'PEEAP_PAYMENT_EXPIRED') { cleanup(); onError?.('Payment session expired'); }
+      };
+      const poll = setInterval(() => { if (popup.closed) { cleanup(); onCancel?.(); } }, 800);
+      window.addEventListener('message', onMessage);
+    } catch (err) {
+      setLoading(false);
+      onError?.(err instanceof Error ? err.message : 'Checkout failed');
+    }
+  }, [amount, publicKey, currency, description, reference, customerEmail, customerPhone, onSuccess, onCancel, onError]);
+
+  return (
+    <button onClick={pay} disabled={loading} className={className} style={style}>
+      {loading ? 'Starting…' : label}
+    </button>
+  );
+}
+```
+
+## 2. Use it
+
+```tsx
+import { PeeapCheckout } from './PeeapCheckout';
+
+export default function Page() {
+  return (
+    <PeeapCheckout
+      publicKey="pk_test_YOUR_PUBLISHABLE_KEY"
+      amount={250}
+      description="Order #1001"
+      reference="ORD-1001"
+      onSuccess={(r) => alert(`Paid! Ref ${r.reference}`)}
+      onCancel={() => console.log('Customer cancelled')}
+      onError={(msg) => console.error(msg)}
+      className="rounded-lg bg-blue-600 px-5 py-3 font-medium text-white"
+    />
+  );
+}
+```
+
+That's a working payment button. Amounts are in **SLE**. Grab your publishable key
+from [your dashboard](/api-reference/auth/api-keys) — use `pk_test_…` while building,
+`pk_live_…` to go live.
+
+## 3. Props
+
+| Prop | Type | Required | Description |
+|------|------|----------|-------------|
+| `publicKey` | string | Yes | Your `pk_test_…` / `pk_live_…` key |
+| `amount` | number | Yes | Amount in SLE |
+| `currency` | string | No | Defaults to `SLE` |
+| `description` | string | No | Shown on the checkout |
+| `reference` | string | No | Your order id — echoed back on success |
+| `customerEmail` / `customerPhone` | string | No | Prefill the checkout |
+| `label` | string | No | Button text (default "Pay with Peeap") |
+| `onSuccess(result)` | function | No | Fires when paid — `result` has `paymentId`, `reference`, `amount`, `method`… |
+| `onCancel()` | function | No | Customer closed / cancelled |
+| `onError(message)` | function | No | Session expired or a request failed |
+
+## Important: confirm before you deliver
+
+<Warning>
+`onSuccess` is great for updating your UI, but a browser event can be spoofed.
+Before you **ship goods, grant access, or mark an order paid**, confirm the payment
+on your server — either with a [webhook](/api-reference/webhooks/manage)
+(`payment.completed`) or by checking the transaction with your **secret** key. Never
+gate real value on the client event alone.
+</Warning>
+
+For a pure front-end v0 prototype this is fine as-is. When you add a backend, wire a
+webhook so fulfilment is tamper-proof.
+
+## How it works
+
+1. The button calls [`POST /checkout/create`](/api-reference/checkout/create) with your
+   publishable key and gets back a `paymentUrl`.
+2. It opens that URL in the hosted Peeap checkout (popup, or a full-page redirect if
+   popups are blocked).
+3. The customer pays by mobile money, card, or QR.
+4. The checkout posts a `PEEAP_PAYMENT_SUCCESS` message back; the component verifies the
+   origin and calls your `onSuccess`.
+
+No secret key ever touches the browser — publishable keys can start a checkout but can't
+read balances or move money, so it's safe to ship in client code.
