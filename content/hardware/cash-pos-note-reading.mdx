@@ -1,0 +1,146 @@
+---
+title: "Cash POS · How a banknote is read"
+description: "Infrared, magnetic, ultraviolet and thickness sensing — and why a camera and a neural net cannot do this job."
+---
+
+# How a banknote is actually read
+
+The instinct, when you set out to build a machine that "reads money," is to point
+a camera at the note and train a classifier. It's a reasonable instinct and it is
+completely wrong, and understanding *why* is the most valuable thing in this whole
+guide.
+
+## A validator is not a camera. It's four sensors.
+
+A banknote validator is a short tunnel. Rollers pull the note through at a
+constant speed while four independent sensor systems measure it simultaneously.
+
+### Infrared — the one that kills photocopies
+
+An LED and photodiode array reads the note's **reflectance and transmission at
+wavelengths your eye cannot see** (typically around 940nm).
+
+Banknote inks are deliberately engineered so that some are transparent in IR and
+others are opaque. Two patches of a note that look *identical* in visible light
+can look *completely different* in infrared. The pattern of IR-transparent and
+IR-opaque regions is, in effect, a hidden second image printed on top of the
+visible one.
+
+A colour photocopier reproduces visible light almost perfectly — and infrared not
+at all. Toner is uniformly IR-opaque. **A photocopied banknote, viewed in
+infrared, is a solid black rectangle.** No pattern, no hidden image, nothing.
+This single channel rejects the overwhelming majority of forgeries instantly.
+
+### Magnetic
+
+Banknote ink contains ferromagnetic particles, laid down in specific patterns —
+typically in the serial numbers and parts of the portrait. A magnetic read head
+picks up a waveform as the note slides past it.
+
+Photocopier toner does contain some iron, so a fake isn't magnetically *silent* —
+but it is magnetically *wrong*. The waveform doesn't match.
+
+### Ultraviolet
+
+Genuine banknote paper contains **no optical brighteners**. Ordinary paper is full
+of them — it's what makes office paper look brilliantly white. Under UV, real
+banknote paper stays dark and dull; office paper *glows*.
+
+Security threads and embedded fibres fluoresce in specific colours in specific
+places. This is the channel that catches the "I printed it on really nice paper"
+forgery.
+
+### Dimension and thickness
+
+An optical encoder counts motor steps while the note breaks a light beam, giving
+its precise length. A thickness sensor catches two notes stuck together, or a
+note with tape on it — which is exactly what an escrow-pullback attack looks like.
+
+## The dataset is the product
+
+All four channels are fused into a feature vector, and that vector is compared
+against a **currency dataset**.
+
+The dataset holds, for each denomination, in each of the **four possible
+orientations** (face up or down × head first or tail first), a template with
+tolerance bands. Those bands have to be wide enough to accept a filthy, torn,
+soft, heavily circulated note — and tight enough to reject a good forgery. That
+balance is not something you can guess at. It is built by the manufacturer from
+several hundred genuine notes sampled across circulation grades.
+
+<Warning>
+**The sensors are commodity. The dataset is not.** When you buy a validator, the
+dataset is what you are actually paying for. A validator with no dataset for your
+currency is an expensive paperweight — it will reject every note you feed it.
+</Warning>
+
+## What your board actually sees
+
+Here is the part that surprises people: **your microcontroller never sees any of
+this.** It doesn't process an image. It doesn't run a model. It sits on a serial
+line and polls, and the conversation is a handful of bytes:
+
+```
+  →  POLL
+  ←  NOTE_READ, channel 4        # a note is in escrow. channel 4 = Le 20.
+  →  STACK                       # commit it to the cash box
+  ←  NOTE_STACKED                # it's in the box. THIS is when you send money.
+```
+
+That's it. `channel 4` maps to a denomination via the channel map you configure
+once, when you set the validator up. The protocol is either **eSSP** (Innovative
+Technology) or **ccTalk** — both are simple serial protocols with well-documented
+command sets and mature open-source libraries.
+
+Notice the shape of it: `NOTE_READ` means *in escrow*. `NOTE_STACKED` means *in
+the box*. Those are two different events and the gap between them is where the
+fraud lives. **Send money on the second one.**
+
+## Why a camera cannot do this
+
+Now the conclusion writes itself.
+
+A camera measures **exactly one** of those four channels: visible reflectance.
+And visible reflectance is precisely the single channel that a colour photocopy
+reproduces perfectly.
+
+An ESP32-CAM and a well-trained classifier would be a genuinely excellent
+banknote **recogniser** — show it a Le 20 and it will tell you, reliably, that it
+is looking at a Le 20. It would also be a completely useless counterfeit
+**detector**, because it will say exactly the same thing about a colour photocopy
+of a Le 20.
+
+Against real money, those are not the same job. Recognition is the easy half.
+Detection is the half that matters, and it lives in the infrared, magnetic and UV
+channels a camera cannot see.
+
+<Note>
+**As a learning project, build the camera version.** It's a great exercise and it
+teaches real computer vision. Just don't wire it to a funded wallet.
+</Note>
+
+## Choosing a validator
+
+**For a prototype or pilot:** get a **learning-mode multi-currency acceptor** —
+the class of validator that lets you *teach* it a note by feeding it 20–30
+samples of each denomination. They're roughly $60–120, they're widely available,
+and they will let you build and demonstrate a complete working machine now.
+
+Their counterfeit detection is meaningfully weaker than a proper manufacturer
+dataset. That is not a reason to avoid them — it's the reason the float cap and
+the daily limit in [the money model](/hardware/cash-pos-overview#the-money-model)
+are doing real work. Bound the loss and the weaker detector becomes an acceptable
+risk.
+
+**For production:** commission a **bespoke currency dataset** from a manufacturer
+(Innovative Technology, ICT, JCM, Cashcode). You send them a few hundred genuine
+notes across circulation grades; they build and certify the dataset. It costs real
+money and takes real time — **so start that conversation early, because it is the
+long pole of the entire project.** Everything else in this guide is a weekend.
+
+<Warning>
+If your currency was recently redenominated, do not assume a dataset exists.
+**Get a written yes or no from the manufacturer before you buy a single
+component.** This is the one question that can kill the project, and it is a
+procurement question, not an engineering one.
+</Warning>

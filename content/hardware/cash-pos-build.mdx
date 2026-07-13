@@ -1,0 +1,334 @@
+---
+title: "Cash POS · Build it"
+description: "Parts, wiring, the wire protocol, firmware, and a simulator you can run today with no hardware at all."
+---
+
+# Build it
+
+Everything you need to build the machine. **Start with the simulator** — it speaks
+the exact same protocol as the firmware, so you can build and test the entire
+money flow tonight, before you order a single part.
+
+## Parts
+
+| Part | Why | Rough cost |
+| --- | --- | --- |
+| **ESP32-S3** dev board | The brain. WiFi, TLS, and enough UARTs. An Arduino Uno cannot do this — no networking, no TLS, nowhere safe to keep a key. | $8 |
+| **Banknote validator** with a dataset for your currency | The whole ballgame. See [how a note is read](/hardware/cash-pos-note-reading#choosing-a-validator). | $60–400 |
+| **4×4 matrix keypad** | Phone number entry. | $3 |
+| **SSD1306 OLED** (or a 2.4" TFT) | The screen. | $5 |
+| **SIM7600 4G module** | Optional but realistic — your sites will not have reliable WiFi. | $30 |
+| **ATECC608A** secure element | Optional, recommended for production: holds the device key so it can't be dumped out of flash. | $2 |
+| 12V PSU + buck converter | The validator wants 12V, the ESP32 wants 3.3V. | $8 |
+
+## Wiring
+
+The validator is the only interesting connection. It's a serial device:
+
+```
+  ESP32-S3                       Validator (eSSP / ccTalk)
+  ────────                       ────────────────────────
+  GPIO17 (TX) ───────────────►   RX
+  GPIO18 (RX) ◄───────────────   TX
+  GND         ───────────────    GND
+                                 12V ◄─── PSU (NOT from the ESP32)
+```
+
+<Warning>
+Power the validator from the 12V supply directly. Its motor draws far more current
+than the ESP32's regulator can give, and browning out the board mid-note is a
+great way to lose track of a customer's money.
+</Warning>
+
+Keypad and OLED are ordinary GPIO and I²C — nothing special.
+
+## The wire protocol
+
+Three endpoints. Every request is signed with the device's own HMAC key.
+
+### Signing
+
+Every request carries four headers:
+
+| Header | Value |
+| --- | --- |
+| `x-device-sn` | The device serial, e.g. `CASHPOS-01` |
+| `x-device-ts` | `Date.now()` in milliseconds. Requests older than 120s are rejected. |
+| `x-device-nonce` | 8 random bytes, hex |
+| `x-device-sig` | HMAC-SHA256 of the canonical string, hex |
+
+The **canonical string** is the fields joined with `|` — explicit fields, not the
+raw body, so it survives any JSON re-serialisation between the device and the
+server:
+
+```
+sn | ts | nonce | action | ...action-specific fields
+```
+
+```javascript
+// heartbeat — no extra fields
+"CASHPOS-01|1752400000000|a1b2c3d4e5f60718|heartbeat"
+
+// resolve — the phone
+"CASHPOS-01|1752400000000|a1b2c3d4e5f60718|resolve|07712345"
+
+// cash-in — phone, amount, idempotency key
+"CASHPOS-01|1752400000000|a1b2c3d4e5f60718|cash-in|07712345|20|cashpos-CASHPOS-01-3f9a…"
+```
+
+### `POST /api/cash-pos/heartbeat`
+
+The idle screen. Tells you how much you may accept right now.
+
+```json
+{
+  "device_sn": "CASHPOS-01",
+  "float_balance": 500,
+  "currency": "SLE",
+  "max_txn": 100,
+  "daily_remaining": 340,
+  "accepting_up_to": 100
+}
+```
+
+`accepting_up_to` is the minimum of the float, the per-transaction limit, and the
+remaining daily headroom. **If it's 0, show OUT OF SERVICE and refuse notes** — a
+note you can't back with e-float is money you have taken from the customer and
+not paid for.
+
+### `POST /api/cash-pos/resolve`
+
+```json
+{ "phone": "07712345" }
+```
+```json
+{ "phone": "+23277712345", "display_name": "AMINATA K." }
+```
+
+Show that name and make the customer press OK. **A mistyped digit is an
+irreversible send to a stranger, and this screen is the only thing standing
+between your customer and that.** Note that the name is deliberately partial —
+enough to catch a typo, not enough to be a phonebook.
+
+### `POST /api/cash-pos/cash-in`
+
+Called **once**, after the notes are physically stacked and the customer confirms.
+
+```json
+{
+  "phone": "07712345",
+  "amount": 20,
+  "notes": [10, 5, 5],
+  "idempotency_key": "cashpos-CASHPOS-01-3f9a1c2e-…"
+}
+```
+
+The server re-adds `notes` itself and rejects the transaction if they don't sum to
+`amount`, or if any entry isn't a real denomination. The device does not get to
+simply assert an amount.
+
+```json
+{
+  "ok": true,
+  "transaction_id": "…",
+  "duplicate": false,
+  "amount": 20,
+  "phone": "+23277712345",
+  "float_balance": 480
+}
+```
+
+**Retry with the same `idempotency_key`.** If the money already moved, you get the
+same `transaction_id` back with `duplicate: true`. You cannot double-send.
+
+| Error | Meaning | What the machine does |
+| --- | --- | --- |
+| `402 INSUFFICIENT_FUNDS` | Float ran dry mid-transaction | **Refund the notes.** Stop accepting. |
+| `403 OVER_TXN_LIMIT` / `OVER_DAILY_LIMIT` | Ceiling hit | Refund, show limit |
+| `404 NO_ACCOUNT` | No Peeap account on that number | Refund, back to number entry |
+| `400 AMOUNT_MISMATCH` | Notes don't sum to the amount | Refund. Something is wrong with your device — log loudly. |
+
+## Provisioning a device
+
+Run once, in SQL. Generate a real random secret — **32 bytes from a CSPRNG**, not
+something you typed:
+
+```sql
+-- The machine's own Peeap account and float wallet, then the device row.
+INSERT INTO cash_pos_devices (device_sn, device_secret, float_wallet_id, label,
+                              max_txn_sle, daily_limit_sle)
+VALUES (
+  'CASHPOS-01',
+  '<32 random bytes, hex>',   -- openssl rand -hex 32
+  '<the float wallet id>',
+  'Counter machine',
+  100,    -- per cash-in ceiling
+  500     -- per day ceiling
+);
+```
+
+Set those two ceilings deliberately. They, plus the float balance, are your entire
+blast radius.
+
+To take a machine out of service — after a pilot, or if a box goes missing:
+
+```sql
+UPDATE cash_pos_devices SET status = 'disabled' WHERE device_sn = 'CASHPOS-01';
+```
+
+## The simulator
+
+This is the machine, in software. Same protocol, same signing, same idempotency —
+the only thing simulated is the validator: you type which notes went in.
+
+```bash
+CASHPOS_SECRET=<your device secret> node sim.js
+```
+
+```javascript
+const crypto = require('crypto');
+const readline = require('readline');
+
+const API = process.env.CASHPOS_API || 'https://api.peeap.com/api';
+const SN = process.env.CASHPOS_SN || 'CASHPOS-01';
+const SECRET = process.env.CASHPOS_SECRET;
+const DENOMINATIONS = [1, 2, 5, 10, 20];
+
+/** Exactly what the firmware does: HMAC-SHA256 over a canonical field list. */
+async function call(action, path, signedParts, body) {
+  const ts = String(Date.now());
+  const nonce = crypto.randomBytes(8).toString('hex');
+  const sig = crypto.createHmac('sha256', SECRET)
+    .update([SN, ts, nonce, action, ...signedParts.map(String)].join('|'))
+    .digest('hex');
+
+  const res = await fetch(`${API}/${path}`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-device-sn': SN, 'x-device-ts': ts,
+      'x-device-nonce': nonce, 'x-device-sig': sig,
+    },
+    body: JSON.stringify(body || {}),
+  });
+  return { status: res.status, json: await res.json().catch(() => ({})) };
+}
+
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+const ask = (q) => new Promise((r) => rl.question(q, r));
+
+async function main() {
+  // Idle: how much float is left?
+  const hb = await call('heartbeat', 'cash-pos/heartbeat', [], {});
+  if (hb.status !== 200 || hb.json.accepting_up_to <= 0) {
+    console.log('OUT OF SERVICE — no float. Top up the machine account.');
+    return rl.close();
+  }
+  console.log(`Float Le ${hb.json.float_balance} · accepts up to Le ${hb.json.accepting_up_to}`);
+
+  // 1. Keypad
+  const phone = (await ask('Recipient number: ')).trim();
+  const who = await call('resolve', 'cash-pos/resolve', [phone], { phone });
+  if (who.status !== 200) { console.log('NUMBER NOT FOUND'); return rl.close(); }
+
+  // 2. Confirm WHO — a typo here is irreversible
+  console.log(`SENDING TO: ${who.json.display_name} (${who.json.phone})`);
+  if ((await ask('Correct? (y/n) ')).toLowerCase() !== 'y') return rl.close();
+
+  // 3. The validator. Each line is a NOTE_STACKED event — never NOTE_READ.
+  const notes = [];
+  for (;;) {
+    const line = (await ask(`Note (${DENOMINATIONS.join('/')}) or ENTER to finish: `)).trim();
+    if (!line) break;
+    const d = Number(line);
+    if (!DENOMINATIONS.includes(d)) { console.log('  ✗ REJECTED — not a note'); continue; }
+    if (notes.reduce((a, b) => a + b, 0) + d > hb.json.accepting_up_to) {
+      console.log('  ✗ REJECTED — over the limit'); continue;
+    }
+    notes.push(d);
+    console.log(`  ✓ STACKED Le ${d} — total Le ${notes.reduce((a, b) => a + b, 0)}`);
+  }
+
+  const amount = notes.reduce((a, b) => a + b, 0);
+  if (!amount) return rl.close();
+
+  console.log(`CONFIRM: send Le ${amount} to ${who.json.display_name}`);
+  if ((await ask('Send? (y/n) ')).toLowerCase() !== 'y') {
+    console.log('REFUNDING NOTES'); return rl.close();
+  }
+
+  // 4. Key generated HERE, before the request. A retry is the same transaction.
+  const idem = `cashpos-${SN}-${crypto.randomUUID()}`;
+  const body = { phone, amount, notes, idempotency_key: idem };
+
+  let out = await call('cash-in', 'cash-pos/cash-in', [phone, amount, idem], body);
+  if (out.status >= 500) {
+    console.log('… no answer, retrying with the SAME key');
+    out = await call('cash-in', 'cash-pos/cash-in', [phone, amount, idem], body);
+  }
+
+  if (out.status !== 200) {
+    console.log(`FAILED: ${out.json.error} — REFUNDING NOTES`);
+  } else {
+    console.log(`SENT ✓ Le ${out.json.amount} → ${who.json.display_name}`);
+    console.log(`Float left: Le ${out.json.float_balance}`);
+    if (out.json.duplicate) console.log('(retry was deduped — sent once, not twice)');
+  }
+  rl.close();
+}
+
+main().catch((e) => { console.error(e); rl.close(); });
+```
+
+Run it, feed it "notes," and watch a real wallet balance change. **When this works,
+your firmware is 90% specified** — all that's left is replacing `ask()` with a
+keypad and the typed denominations with `NOTE_STACKED` events.
+
+## The firmware loop
+
+On the ESP32, the whole thing is this shape:
+
+```cpp
+// The validator conversation. eSSP/ccTalk libraries give you these primitives.
+void collectNotes() {
+  while (collecting) {
+    Event e = validator.poll();
+
+    if (e.type == NOTE_READ) {           // in ESCROW — not yet ours
+      int denom = channelMap[e.channel];
+      if (total + denom > acceptingUpTo) {
+        validator.reject();              // give it back
+      } else {
+        validator.stack();               // commit it to the cash box
+      }
+    }
+
+    if (e.type == NOTE_STACKED) {        // NOW it's physically in the box
+      notes[count++] = channelMap[e.channel];
+      total += channelMap[e.channel];
+      screen.showTotal(total);           // <-- the ONLY place we count money
+    }
+  }
+}
+```
+
+The comment on that last line is the whole security model. `NOTE_READ` is a note
+the customer can still pull back out. `NOTE_STACKED` is money.
+
+For the HMAC, use `mbedtls_md_hmac` — it's already in the ESP32 SDK, no extra
+library:
+
+```cpp
+mbedtls_md_hmac(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256),
+                (const unsigned char*)deviceSecret, strlen(deviceSecret),
+                (const unsigned char*)canonical, strlen(canonical),
+                hmacOut);
+```
+
+## Before you put it on a counter
+
+<Check>**Reconcile daily.** Count the cash in the box. It must equal the sum of that device's cash-ins since it was last emptied. Any drift is fraud or a bug, and you want to find out today, not next quarter.</Check>
+<Check>**Keep the float small.** It is the ceiling on your worst day. Top up often rather than deeply.</Check>
+<Check>**Never ship a platform key in the box.** The device gets its own key, scoped to its own wallet. A device in the field is a device that will eventually be opened.</Check>
+<Check>**Test the retry path for real.** Pull the antenna mid-transaction. The money must move exactly once.</Check>
+<Check>**Test the refund path for real.** Empty the float, then feed a note. The machine must give it back, not eat it.</Check>

@@ -58,6 +58,14 @@
             ]
           },
           {
+            "group": "Hardware",
+            "pages": [
+              "hardware/cash-pos-overview",
+              "hardware/cash-pos-note-reading",
+              "hardware/cash-pos-build"
+            ]
+          },
+          {
             "group": "Reference",
             "pages": ["guide/reference"]
           },

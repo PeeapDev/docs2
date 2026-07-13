@@ -1,0 +1,112 @@
+---
+title: "Cash POS · Overview"
+description: "Build a machine that accepts physical banknotes and sends the same value to any Peeap wallet."
+---
+
+# Cash POS · a machine that turns paper into e-money
+
+This is a complete, buildable project: a countertop machine with a keypad, a
+screen, and a banknote acceptor. A customer types a phone number, feeds in notes,
+and the machine sends that exact amount to the Peeap wallet behind that number.
+
+It's the classic agent cash-in kiosk, and you can build one for well under $200.
+
+<Note>
+Everything here is real. The machine moves real money out of a real Peeap wallet.
+Read [The money model](#the-money-model) before you build — it is the difference
+between a kiosk and a liability.
+</Note>
+
+## The money model
+
+The single most important thing to understand: **the machine does not create
+money. It moves money it already has.**
+
+The machine is bound to one Peeap account — its **float account**. That account
+holds a balance. When a customer feeds in Le 20:
+
+1. The Le 20 note goes into the machine's sealed cash box. It is now **your**
+   cash, physically.
+2. The machine sends Le 20 **out of its own float wallet** into the customer's
+   wallet.
+
+The two sides balance. At the end of the day, the cash in the box equals the
+e-float the machine gave away. You have swapped e-money for paper.
+
+```
+  customer's Le 20 note  ──────►  [ cash box ]        (you now hold the paper)
+  float wallet  ── Le 20 ──────►  customer's wallet   (they now hold e-money)
+```
+
+This design has one enormous property, and you should build your whole security
+posture around it:
+
+<Warning>
+**The float balance is the hard ceiling on everything that can go wrong.**
+
+Someone prises the box open and spoofs the note sensor? Someone replays the
+"note accepted" message? The validator misreads a fake? In every case the maximum
+they can extract is *whatever is sitting in that float wallet* — because that is
+the only wallet the machine is allowed to debit.
+
+So: **keep the float small, and top it up often.** A machine carrying Le 500 of
+float is a Le 500 problem. A machine carrying Le 50,000 is a very different one.
+This one decision buys you more safety than any amount of clever code.
+</Warning>
+
+## What the machine can and cannot do
+
+The machine authenticates with a **per-device HMAC key** — its own secret, unique
+to that one box. That key is not a platform key. It is scoped so that the device
+can only ever do three things:
+
+| The machine **can** | The machine **cannot** |
+| --- | --- |
+| Read its own float balance | Read anyone else's balance |
+| Look up a recipient's display name to confirm a typo | Look up anyone's balance, history, or full details |
+| Move money **out of its own float wallet** | Credit an arbitrary wallet |
+| — | Move more than its per-transaction or daily limit |
+
+If you take one lesson from this guide, take this one: **never put a
+platform-wide service key in a box that sits on a counter.** A device in the
+field is a device that will eventually be opened. Give it a key that can only
+hurt itself.
+
+## Three rules that are not optional
+
+**1. Credit on *stacked*, never on *validated*.**
+
+Banknote validators hold a note in *escrow* — gripped inside the machine, not yet
+committed to the cash box — while they decide. Only when you send a `STACK`
+command does it drop into the box. If you send money when the validator says
+"this is a genuine Le 20," an attacker tapes a thread to the note, collects the
+credit, and pulls the note back out. This is the oldest attack against note
+acceptors and it still works. **Send money only when the validator confirms the
+note is physically stacked.**
+
+**2. The server must not trust the amount.**
+
+The device sends the list of denominations it stacked, and the server re-adds
+them itself. If the device claims "Le 37" but the notes it lists don't sum to 37 —
+or contain a denomination that isn't a real note — the whole transaction is
+refused. A compromised device shouldn't be able to simply *assert* an amount.
+
+**3. Generate the idempotency key on the device, before you send.**
+
+Mobile data drops. The request goes out, the money moves, the response never
+comes back. If the machine retries with a *new* key, it sends twice. If it
+retries with the *same* key, the server recognises the transaction and returns
+the original result. **The key is generated once, before the first attempt, and
+reused for every retry of that same physical cash-in.**
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="How a note is actually read" href="/hardware/cash-pos-note-reading">
+    Infrared, magnetic, UV, thickness — and why a camera cannot do this job.
+  </Card>
+  <Card title="Build it" href="/hardware/cash-pos-build">
+    Parts list, wiring, the wire protocol, firmware, and a simulator you can run
+    today with no hardware at all.
+  </Card>
+</CardGroup>
