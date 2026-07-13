@@ -91,7 +91,8 @@
             "group": "Authentication",
             "pages": [
               "api-reference/auth/api-keys",
-              "api-reference/auth/oauth"
+              "api-reference/auth/oauth",
+              "api-reference/auth/password-reset"
             ]
           },
           {
