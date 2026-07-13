@@ -148,6 +148,74 @@ same `transaction_id` back with `duplicate: true`. You cannot double-send.
 | `404 NO_ACCOUNT` | No Peeap account on that number | Refund, back to number entry |
 | `400 AMOUNT_MISMATCH` | Notes don't sum to the amount | Refund. Something is wrong with your device — log loudly. |
 
+### `POST /api/cash-pos/cash-out-momo`
+
+**Cash in the box → mobile money on any number.** The recipient needs no Peeap
+account at all. This is the endpoint most machines will actually use.
+
+```json
+{
+  "phone": "072799454",
+  "amount": 5,
+  "notes": [5],
+  "pin": "1234",
+  "idempotency_key": "cashpos-CASHPOS-01-3f9a…"
+}
+```
+```json
+{
+  "ok": true,
+  "status": "PROCESSING",
+  "action": "STACK_NOTES",
+  "cash_received": 5,
+  "fee": 0.15,
+  "sent": 4.85,
+  "provider": "Orange Money",
+  "float_balance": 15
+}
+```
+
+Three things are happening here, and each one is load-bearing.
+
+**The PIN proves the human; the HMAC proves the machine.** The operator types the
+machine account's real transaction PIN at the keypad and it is verified
+**server-side** against the stored hash. It is never stored on the device and
+never compared on the device. So the device key alone cannot move money — someone
+who steals the whole box still needs a person who knows the PIN. Three wrong
+attempts locks the machine for two hours.
+
+<Warning>
+Do **not** put the PIN in the signed canonical string. A signed field ends up in a
+header, and headers survive in proxy logs and crash dumps. Sign the amount and the
+destination; send the PIN in the body.
+</Warning>
+
+**The fee comes out of the cash inserted.** Feed Le 5, the machine's cut is 3%
+(Le 0.15), the recipient's mobile money gets Le 4.85, and the float is debited
+**exactly Le 5** — so the cash in the box always equals the float given up, and
+the daily count reconciles to the leone. Absorbing the fee instead would bleed the
+float on every transaction and the box would never balance. The rate is
+per-device (`cash_pos_devices.fee_percent`), *not* the platform-wide cashout fee.
+
+**`action` tells the machine what to do with the notes.** They are still sitting in
+the validator's escrow at this point:
+
+| `action` | What the machine does |
+| --- | --- |
+| `STACK_NOTES` | The money left the float. Commit the notes to the cash box. |
+| `REJECT_NOTES` | The payout failed and the float was refunded. **Give the cash back.** |
+
+Retry with the same `idempotency_key` and you get the original payout back with
+`duplicate: true` — and, critically, still `action: STACK_NOTES`.
+
+<Warning>
+**This is the bug that will cost you money if you get it wrong.** A machine that
+treats *any* non-200 as "refund the notes" will hand the customer their cash back
+after the transfer already went out — a silent loss every time the network drops
+at the wrong moment. The retry must be idempotent and it must come back saying
+`STACK_NOTES`. Test it by pulling the antenna mid-transaction.
+</Warning>
+
 ## Provisioning a device
 
 Run once, in SQL. Generate a real random secret — **32 bytes from a CSPRNG**, not
@@ -284,9 +352,22 @@ Run it, feed it "notes," and watch a real wallet balance change. **When this wor
 your firmware is 90% specified** — all that's left is replacing `ask()` with a
 keypad and the typed denominations with `NOTE_STACKED` events.
 
-## The firmware loop
+## The firmware
 
-On the ESP32, the whole thing is this shape:
+The full ESP32 sketch — WiFi, TLS, HMAC signing, keypad, OLED, and the validator
+state machine — is in the Peeap repo at `tools/cash-pos-firmware/cash-pos.ino`.
+
+Two details in it are easy to get wrong:
+
+**The clock must be right.** Every request carries a timestamp and the server
+rejects anything more than 120 seconds off. Call `configTime()` and wait for NTP
+before the first request, or every call comes back `401 Stale request`.
+
+**Do not use `client.setInsecure()`.** It is the fastest way to make TLS "work"
+and it disables certificate verification — anyone on the same WiFi can then
+impersonate the API to your machine and harvest the PIN. Embed the root CA.
+
+The heart of it is this loop:
 
 ```cpp
 // The validator conversation. eSSP/ccTalk libraries give you these primitives.

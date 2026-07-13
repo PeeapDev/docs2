@@ -1,15 +1,23 @@
 ---
 title: "Cash POS · Overview"
-description: "Build a machine that accepts physical banknotes and sends the same value to any Peeap wallet."
+description: "Build a machine that accepts physical banknotes and sends the money to any mobile money number or Peeap wallet."
 ---
 
 # Cash POS · a machine that turns paper into e-money
 
 This is a complete, buildable project: a countertop machine with a keypad, a
 screen, and a banknote acceptor. A customer types a phone number, feeds in notes,
-and the machine sends that exact amount to the Peeap wallet behind that number.
+and the machine sends the money.
 
 It's the classic agent cash-in kiosk, and you can build one for well under $200.
+
+The machine can send to either destination:
+
+- **Any mobile money number** — Orange Money or Afrimoney. The recipient needs no
+  Peeap account, which is what makes this useful to walk-up customers. Carries a
+  fee, and settles through Monime rather than instantly.
+- **A Peeap wallet** — instant and free, but the recipient must already have an
+  account.
 
 <Note>
 Everything here is real. The machine moves real money out of a real Peeap wallet.
