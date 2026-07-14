@@ -5,8 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "node scripts/gen-llms.mjs",
-    "build": "node scripts/gen-llms.mjs && vite build",
+    "build": "node scripts/gen-llms.mjs && vite build && vite build --ssr src/entry-server.jsx --outDir dist-ssr && node scripts/prerender.mjs",
     "preview": "vite preview --port 4173"
   },
   "dependencies": {
