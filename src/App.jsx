@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, NavLink, useLocation, Navigate, Link } from 'react-router-dom';
+import { Routes, Route, NavLink, useLocation, Link } from 'react-router-dom';
 import { MDXProvider } from '@mdx-js/react';
 import { mdxComponents, TryIt } from './mintlify.jsx';
 import docsConfig from '../content/docs.json';
@@ -172,7 +172,10 @@ export function App() {
           <div className="topbar-actions"><CopyPageButton pageKey={key} /></div>
         </div>
         <Routes>
-          <Route path="/" element={<Navigate to="/introduction" replace />} />
+          {/* "/" renders Introduction in place rather than redirecting: a redirect on the
+              root breaks Google Search Console's HTML-tag verification, which fetches the
+              property URL exactly. Page() already defaults an empty path to 'introduction',
+              and the prerendered "/" canonicalises to /introduction so they don't compete. */}
           <Route path="*" element={<Page />} />
         </Routes>
       </div>

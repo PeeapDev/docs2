@@ -112,15 +112,19 @@ for (const r of routes) {
   fs.writeFileSync(out, html);
 }
 
-// dist/index.html is no longer the homepage — "/" 308-redirects to /introduction
-// (see vercel.json). It survives only as the SPA fallback for URLs that don't
-// exist, so it must not be indexed and must not claim a canonical.
+// "/" is prerendered in place (no redirect) so Google Search Console's HTML-tag
+// verification, which fetches the property URL exactly, sees a real page. It renders
+// Introduction and canonicalises there, so the two don't compete for indexing.
+// This same file is also the SPA fallback for unknown URLs.
+const home = routes.find((r) => r.key === 'introduction') || routes[0];
 fs.writeFileSync(
   path.join(DIST, 'index.html'),
-  template.replace(
-    SEO_BLOCK,
-    head({ title: 'Not found', description: FALLBACK_DESC, url: `${BASE}/introduction`, index: false })
-  )
+  template
+    .replace(
+      SEO_BLOCK,
+      head({ title: home.title, description: home.description, url: `${BASE}/${home.key}` })
+    )
+    .replace('<!--app-->', render('/'))
 );
 
 console.log(`prerender: ${routes.length} routes → static HTML (canonical base ${BASE})`);
