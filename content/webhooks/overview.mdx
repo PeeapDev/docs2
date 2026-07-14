@@ -1,141 +1,184 @@
 ---
 title: Webhooks Overview
-description: "Real-time event notifications"
+description: "Real-time event notifications for payments and payouts"
 ---
 
 # Webhooks Overview
 
-Webhooks allow you to receive real-time notifications when events occur in your Payment System account.
+Webhooks let Peeap notify your server the moment a payment or payout settles,
+instead of your server polling for status. Every delivery is signed, logged,
+and retried.
 
 ## How Webhooks Work
 
-1. You configure a webhook endpoint URL in your dashboard
-2. When an event occurs (e.g., transaction completed), we send an HTTP POST to your endpoint
-3. Your server processes the event and responds with a 2xx status code
-4. If delivery fails, we retry with exponential backoff
+1. You register a publicly reachable **HTTPS** endpoint (two ways, below)
+2. When an event occurs — a payment completes, a payout settles or fails — Peeap
+   sends an HTTP POST to your endpoint
+3. Your server verifies the signature, processes the event, and responds with a
+   2xx status code
+4. If delivery fails (non-2xx, or no response within 10 seconds), Peeap retries
+   on a backoff schedule
 
-## Setting Up Webhooks
+## Two Ways to Subscribe
 
-### 1. Create an Endpoint
+Both feed the same signed, logged, retried delivery pipeline.
 
-Configure a publicly accessible HTTPS endpoint that can receive POST requests.
+### 1. The API
 
-### 2. Register the Webhook
+Register an endpoint with your **secret key** (`sk_…`). The key needs the
+`webhooks:write` scope.
 
 ```bash
-curl -X POST https://api.peeap.com/webhooks \
-  -H "Authorization: Bearer YOUR_TOKEN" \
+curl -X POST https://api.peeap.com/v1/webhooks \
+  -H "Authorization: Bearer sk_live_YOUR_SECRET_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "url": "https://your-server.com/webhooks",
-    "events": ["transaction.completed", "card.blocked"],
-    "secret": "your-webhook-secret"
+    "url": "https://your-server.com/webhooks/peeap",
+    "events": ["payment.completed"]
   }'
 ```
 
-### 3. Verify Signatures
+- `url` — required, must be `https://…`
+- `events` — optional; a subset of the supported events. Omit it to subscribe
+  to all three.
 
-Always verify webhook signatures to ensure authenticity. See [Webhook Signatures](/webhooks/signatures).
-
-## Webhook Payload
-
-All webhooks have a consistent structure:
+Response (`201`):
 
 ```json
 {
-  "id": "evt_abc123",
-  "type": "transaction.completed",
-  "createdAt": "2024-01-15T10:30:00Z",
+  "success": true,
   "data": {
-    "id": "txn_xyz789",
-    "type": "PURCHASE",
-    "amount": 99.99,
-    "currency": "SLE",
-    "status": "CAPTURED"
+    "id": "3f7c9a2e-...",
+    "url": "https://your-server.com/webhooks/peeap",
+    "events": ["payment.completed"],
+    "created_at": "2026-07-14T10:00:00.000Z",
+    "secret": "whsec_9f2b7c4e1a8d3f6b0c5e2a7d4f1b8e3c6a9d2f5b8e1c4a7d"
   }
 }
 ```
 
-## Event Types
+<Warning>
+The `secret` (`whsec_` + 48 hex characters) is returned **once, at creation**,
+and is never retrievable again. Store it like a password — you need it to
+verify the signature on every delivery. To rotate it, delete the webhook and
+create a new one.
+</Warning>
 
-| Category | Events |
-|----------|--------|
-| **Transactions** | `transaction.authorized`, `transaction.completed`, `transaction.declined`, `transaction.refunded` |
-| **Cards** | `card.created`, `card.activated`, `card.blocked`, `card.cancelled` |
-| **Wallets** | `wallet.created`, `wallet.frozen`, `wallet.low_balance` |
-| **KYC** | `kyc.submitted`, `kyc.approved`, `kyc.rejected` |
+### 2. Business Settings
 
-See [Webhook Events](/webhooks/events) for complete event details.
+Paste your endpoint URL into **Business Settings → Webhook URL** in the
+dashboard. Peeap mirrors it into the same managed webhook system (subscribed to
+all three events) and backfills a signing secret into your business settings so
+you can read it there. Editing the URL re-points the endpoint; clearing the
+field deactivates it.
+
+## Events
+
+Exactly three events exist today:
+
+| Event | Fires when |
+|-------|-----------|
+| `payment.completed` | An incoming payment settles — on **every** rail: mobile money, USSD, card, scan-to-pay / QR, NFC tap, POS |
+| `payout.completed` | A payout reaches its destination |
+| `payout.failed` | A payout fails (funds are auto-refunded to your wallet) |
+
+See [Webhook Events](/webhooks/events) for payload details.
+
+## The Delivery
+
+Each delivery is a `POST` with a JSON body:
+
+```json
+{
+  "id": "b4d1f8e2-3c6a-4f9b-8e2d-7a5c1f4b9e3d",
+  "type": "payment.completed",
+  "created": 1752487200,
+  "data": {
+    "id": "cs_a1b2c3d4",
+    "reference": "order_1042",
+    "amount": 150.00,
+    "currency": "SLE",
+    "status": "completed",
+    "payment_method": "mobile_money"
+  }
+}
+```
+
+- `id` — unique event id
+- `type` — the event name
+- `created` — Unix timestamp in **seconds**
+- `data` — the event object (see [Events](/webhooks/events))
+
+And these headers:
+
+| Header | Meaning |
+|--------|---------|
+| `X-Webhook-Signature` | `t=<unix seconds>,v1=<hex HMAC-SHA256>` — verify this on every delivery ([Signatures](/webhooks/signatures)) |
+| `X-Webhook-Id` | Stable delivery id — **your dedupe key**; retries reuse it |
+| `X-Webhook-Event` | The event name (same as `type` in the body) |
+| `X-Webhook-Attempt` | Attempt number, starting at `1` |
 
 ## Retry Policy
 
-If your endpoint doesn't return a 2xx status code, we retry:
+A delivery counts as successful only on a 2xx response. Anything else —
+including a timeout after 10 seconds — schedules a retry:
 
-| Attempt | Delay |
-|---------|-------|
-| 1st retry | 1 minute |
-| 2nd retry | 5 minutes |
-| 3rd retry | 30 minutes |
-| 4th retry | 2 hours |
-| 5th retry | 24 hours |
+| Attempt | Delay after previous failure |
+|---------|------------------------------|
+| 2nd | 1 minute |
+| 3rd | 5 minutes |
+| 4th | 25 minutes |
+| 5th | 2 hours |
+| 6th | 10 hours |
 
-After 5 failed attempts, the webhook is marked as failed.
+After 6 failed attempts the delivery is parked permanently — it will not be
+retried again.
+
+<Warning>
+Retries can overlap (a slow response can trigger a retry while your first
+attempt is still processing). **Always dedupe on the `X-Webhook-Id` header**
+before acting on an event.
+</Warning>
 
 ## Best Practices
 
-<Warning>
-  Always verify webhook signatures before processing events.
-</Warning>
+1. **Verify signatures** on every delivery — see [Signatures](/webhooks/signatures)
+2. **Dedupe on `X-Webhook-Id`** — retries mean you *will* see the same event twice
+3. **Return 2xx quickly** — respond within 10 seconds; do real work asynchronously
+4. **Treat webhooks as notifications, not truth** — reconcile against
+   [`GET /v1/payments`](/guide/reconciliation) on a schedule
+5. **Use HTTPS** — non-HTTPS URLs are rejected at registration
 
-1. **Return quickly**: Respond with 200 immediately, process asynchronously
-2. **Handle duplicates**: Use the event `id` for idempotency
-3. **Verify signatures**: Always validate the webhook signature
-4. **Use HTTPS**: Only use secure endpoints
-5. **Log everything**: Keep logs for debugging
+## Local Development
 
-## Testing Webhooks
-
-### Test Endpoint
-
-Send a test event to verify your endpoint:
-
-```bash
-curl -X POST https://api.peeap.com/webhooks/wh_abc123/test \
-  -H "Authorization: Bearer YOUR_TOKEN"
-```
-
-### Local Development
-
-Use tools like [ngrok](https://ngrok.com) to expose your local server:
+Use a tunnel such as [ngrok](https://ngrok.com) to expose your local server
+over HTTPS:
 
 ```bash
 ngrok http 3000
-# Use the HTTPS URL as your webhook endpoint
+# Register the https:// forwarding URL as your webhook endpoint
 ```
 
 ## Managing Webhooks
 
 ### List Webhooks
 
-```bash
-curl https://api.peeap.com/webhooks \
-  -H "Authorization: Bearer YOUR_TOKEN"
-```
-
-### Update Webhook
+Secrets are never included in the list.
 
 ```bash
-curl -X PATCH https://api.peeap.com/webhooks/wh_abc123 \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "events": ["transaction.completed", "transaction.declined"]
-  }'
+curl https://api.peeap.com/v1/webhooks \
+  -H "Authorization: Bearer sk_live_YOUR_SECRET_KEY"
 ```
 
-### Delete Webhook
+### Delete (deactivate) a Webhook
 
 ```bash
-curl -X DELETE https://api.peeap.com/webhooks/wh_abc123 \
-  -H "Authorization: Bearer YOUR_TOKEN"
+curl -X DELETE https://api.peeap.com/v1/webhooks/WEBHOOK_ID \
+  -H "Authorization: Bearer sk_live_YOUR_SECRET_KEY"
 ```
+
+<Note>
+There is no update endpoint. To change a webhook's URL or events, delete it and
+register a new one (which issues a new secret) — or manage the URL through
+Business Settings.
+</Note>

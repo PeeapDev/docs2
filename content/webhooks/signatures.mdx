@@ -5,41 +5,53 @@ description: "Verify webhook authenticity"
 
 # Webhook Signatures
 
-Verify webhook signatures to ensure events are authentic and haven't been tampered with.
+Verify webhook signatures to ensure events are authentic and haven't been
+tampered with. Your endpoint is a public URL — anyone can POST to it — so
+**never act on a delivery you haven't verified**.
 
 ## How Signatures Work
 
-Each webhook request includes a signature in the `X-Webhook-Signature` header. This signature is computed using HMAC-SHA256 with your webhook secret.
+Each delivery includes a signature in the `X-Webhook-Signature` header,
+computed with HMAC-SHA256 using your `whsec_…` webhook secret.
 
 ## Signature Header
 
 ```
-X-Webhook-Signature: t=1705312200,v1=5257a869e7ecebeda32affa62cdca3fa51cad7e77a0e56ff536d0ce8e108d8bd
+X-Webhook-Signature: t=1752487200,v1=5257a869e7ecebeda32affa62cdca3fa51cad7e77a0e56ff536d0ce8e108d8bd
 ```
 
 The header contains:
-- `t`: Unix timestamp when the signature was created
-- `v1`: The signature hash
+- `t`: Unix timestamp in **seconds** when the signature was created
+- `v1`: hex HMAC-SHA256 of the string `"{t}.{rawBody}"` with your secret
 
 ## Verification Process
 
 ### 1. Extract Components
 
 ```javascript
-const signatureHeader = req.headers['x-webhook-signature'];
-const [timestamp, signature] = signatureHeader.split(',').map(part => {
-  const [key, value] = part.split('=');
-  return value;
-});
+const signatureHeader = req.headers['x-webhook-signature']; // "t=...,v1=..."
+const parts = Object.fromEntries(
+  signatureHeader.split(',').map((kv) => kv.split('='))
+);
+// parts.t  -> timestamp (seconds)
+// parts.v1 -> signature hex
 ```
 
 ### 2. Prepare the Payload
 
-Concatenate the timestamp and request body:
+Concatenate the timestamp and the **raw request body** — the exact bytes you
+received, before any JSON parsing or re-serialising:
 
 ```javascript
-const signedPayload = `${timestamp}.${JSON.stringify(req.body)}`;
+// With Express, capture the raw body: express.raw({ type: "application/json" })
+const signedPayload = `${parts.t}.${req.body.toString('utf8')}`;
 ```
+
+<Warning>
+Never compute the signature over `JSON.stringify(req.body)` after your
+framework has parsed it — re-serialising can reorder keys or change whitespace
+and the bytes will no longer match what Peeap signed.
+</Warning>
 
 ### 3. Compute Expected Signature
 
@@ -57,12 +69,12 @@ const expectedSignature = crypto
 Use constant-time comparison to prevent timing attacks:
 
 ```javascript
-const crypto = require('crypto');
-
-const isValid = crypto.timingSafeEqual(
-  Buffer.from(signature),
-  Buffer.from(expectedSignature)
-);
+const isValid =
+  expectedSignature.length === parts.v1.length &&
+  crypto.timingSafeEqual(
+    Buffer.from(parts.v1),
+    Buffer.from(expectedSignature)
+  );
 ```
 
 ## Complete Example
@@ -72,38 +84,40 @@ const isValid = crypto.timingSafeEqual(
 ```javascript
 const crypto = require('crypto');
 
-function verifyWebhookSignature(req, webhookSecret) {
-  const signatureHeader = req.headers['x-webhook-signature'];
-
+function verifyWebhookSignature(rawBody, signatureHeader, webhookSecret) {
   if (!signatureHeader) {
     throw new Error('Missing signature header');
   }
 
-  // Parse header
-  const parts = signatureHeader.split(',');
-  const timestamp = parts[0].split('=')[1];
-  const signature = parts[1].split('=')[1];
+  // Parse header: "t=<seconds>,v1=<hex>"
+  const parts = Object.fromEntries(
+    signatureHeader.split(',').map((kv) => kv.split('='))
+  );
+  const timestamp = parts.t;
+  const signature = parts.v1;
 
   // Check timestamp (prevent replay attacks)
   const currentTime = Math.floor(Date.now() / 1000);
   const tolerance = 300; // 5 minutes
 
-  if (Math.abs(currentTime - parseInt(timestamp)) > tolerance) {
-    throw new Error('Timestamp too old');
+  if (Math.abs(currentTime - parseInt(timestamp, 10)) > tolerance) {
+    throw new Error('Timestamp outside tolerance');
   }
 
-  // Compute expected signature
-  const signedPayload = `${timestamp}.${JSON.stringify(req.body)}`;
+  // Compute expected signature over "t.rawBody"
+  const signedPayload = `${timestamp}.${rawBody}`;
   const expectedSignature = crypto
     .createHmac('sha256', webhookSecret)
     .update(signedPayload)
     .digest('hex');
 
   // Constant-time comparison
-  const isValid = crypto.timingSafeEqual(
-    Buffer.from(signature),
-    Buffer.from(expectedSignature)
-  );
+  const isValid =
+    expectedSignature.length === signature.length &&
+    crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expectedSignature)
+    );
 
   if (!isValid) {
     throw new Error('Invalid signature');
@@ -112,21 +126,36 @@ function verifyWebhookSignature(req, webhookSecret) {
   return true;
 }
 
-// Express middleware
-app.post('/webhooks', (req, res) => {
-  try {
-    verifyWebhookSignature(req, process.env.WEBHOOK_SECRET);
+// Express — note express.raw so we verify the exact bytes received
+app.post(
+  '/webhooks/peeap',
+  express.raw({ type: 'application/json' }),
+  (req, res) => {
+    try {
+      const rawBody = req.body.toString('utf8');
+      verifyWebhookSignature(
+        rawBody,
+        req.headers['x-webhook-signature'],
+        process.env.PEEAP_WEBHOOK_SECRET // whsec_...
+      );
 
-    // Process the webhook
-    const event = req.body;
-    console.log('Received event:', event.type);
+      // Dedupe BEFORE acting: retries reuse the same X-Webhook-Id.
+      const deliveryId = req.headers['x-webhook-id'];
+      if (alreadyProcessed(deliveryId)) {
+        return res.status(200).send('OK'); // already handled — just ACK
+      }
 
-    res.status(200).send('OK');
-  } catch (error) {
-    console.error('Webhook verification failed:', error.message);
-    res.status(400).send('Invalid signature');
+      const event = JSON.parse(rawBody);
+      console.log('Received event:', event.type);
+      // ...process asynchronously, keyed on deliveryId...
+
+      res.status(200).send('OK');
+    } catch (error) {
+      console.error('Webhook verification failed:', error.message);
+      res.status(400).send('Invalid signature');
+    }
   }
-});
+);
 ```
 
 ### Python
@@ -135,7 +164,7 @@ app.post('/webhooks', (req, res) => {
 import hmac
 import hashlib
 import time
-import json
+import os
 
 def verify_webhook_signature(request, webhook_secret):
     signature_header = request.headers.get('X-Webhook-Signature')
@@ -143,7 +172,7 @@ def verify_webhook_signature(request, webhook_secret):
     if not signature_header:
         raise ValueError('Missing signature header')
 
-    # Parse header
+    # Parse header: "t=<seconds>,v1=<hex>"
     parts = dict(part.split('=') for part in signature_header.split(','))
     timestamp = parts['t']
     signature = parts['v1']
@@ -153,9 +182,9 @@ def verify_webhook_signature(request, webhook_secret):
     tolerance = 300  # 5 minutes
 
     if abs(current_time - int(timestamp)) > tolerance:
-        raise ValueError('Timestamp too old')
+        raise ValueError('Timestamp outside tolerance')
 
-    # Compute expected signature
+    # Compute expected signature over "t.rawBody" — the RAW body
     body = request.get_data(as_text=True)
     signed_payload = f'{timestamp}.{body}'
     expected_signature = hmac.new(
@@ -171,10 +200,15 @@ def verify_webhook_signature(request, webhook_secret):
     return True
 
 # Flask example
-@app.route('/webhooks', methods=['POST'])
+@app.route('/webhooks/peeap', methods=['POST'])
 def handle_webhook():
     try:
-        verify_webhook_signature(request, os.environ['WEBHOOK_SECRET'])
+        verify_webhook_signature(request, os.environ['PEEAP_WEBHOOK_SECRET'])
+
+        # Dedupe before acting: retries reuse the same X-Webhook-Id.
+        delivery_id = request.headers.get('X-Webhook-Id')
+        if already_processed(delivery_id):
+            return 'OK', 200
 
         event = request.json
         print(f'Received event: {event["type"]}')
@@ -188,28 +222,45 @@ def handle_webhook():
 ## Timestamp Tolerance
 
 <Warning>
-  Always check the timestamp to prevent replay attacks. Reject signatures older than 5 minutes.
+Always check the timestamp to prevent replay attacks. `t` is in Unix
+**seconds** — reject deliveries more than 300 seconds (5 minutes) from your
+server's current time.
 </Warning>
 
-The timestamp in the signature header indicates when the webhook was sent. You should:
+The timestamp in the signature header indicates when the delivery was signed.
+You should:
 
-1. Compare it to your server's current time
-2. Reject if the difference exceeds your tolerance (recommended: 5 minutes)
+1. Compare it to your server's current time (in seconds)
+2. Reject if the difference exceeds your tolerance (recommended: 300 seconds)
 3. Account for clock skew between servers
+
+## Handle Duplicates
+
+Failed deliveries are retried up to **6 attempts total**, with backoff of
+1 minute, 5 minutes, 25 minutes, 2 hours, then 10 hours after each failure —
+and retries can overlap a slow first attempt. Every retry of the same delivery
+carries the same `X-Webhook-Id` header, so:
+
+1. Record each `X-Webhook-Id` you process
+2. If you've seen the id before, return `200` without re-processing
+3. Return `200` within 10 seconds — a slow response is treated as a failure
+   and triggers another retry
 
 ## Rotating Secrets
 
-When rotating your webhook secret:
+There is no rotate endpoint. To rotate a secret:
 
-1. Configure the new secret in your dashboard
-2. Update your application to accept both old and new secrets temporarily
-3. Once all in-flight webhooks are processed, remove the old secret
+1. Register a new webhook with the same URL (`POST /v1/webhooks`) — this issues
+   a fresh `whsec_…` secret
+2. Update your application to accept both the old and new secrets temporarily
+3. Delete the old webhook (`DELETE /v1/webhooks/:id`)
+4. Once all in-flight deliveries are processed, remove the old secret
 
 ```javascript
-function verifyWithMultipleSecrets(req, secrets) {
+function verifyWithMultipleSecrets(rawBody, header, secrets) {
   for (const secret of secrets) {
     try {
-      verifyWebhookSignature(req, secret);
+      verifyWebhookSignature(rawBody, header, secret);
       return true;
     } catch {
       continue;
@@ -223,6 +274,7 @@ function verifyWithMultipleSecrets(req, secrets) {
 
 | Issue | Solution |
 |-------|----------|
-| Signature mismatch | Ensure you're using the raw request body, not parsed JSON |
-| Timestamp rejected | Check your server's clock synchronization |
-| Missing header | Verify the webhook URL is correctly configured |
+| Signature mismatch | Ensure you're using the raw request body, not re-serialised JSON |
+| Timestamp rejected | Check your server's clock synchronization; `t` is in seconds |
+| Missing header | Verify the webhook URL is correctly registered and reachable over HTTPS |
+| Same event twice | Expected — dedupe on `X-Webhook-Id` |

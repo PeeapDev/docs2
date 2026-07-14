@@ -1,315 +1,143 @@
 ---
 title: Webhook Events
-description: "Complete list of webhook event types"
+description: "The webhook event types Peeap delivers"
 ---
 
 # Webhook Events
 
-Complete reference for all webhook event types.
-
-## Transaction Events
-
-### transaction.authorized
-
-Sent when a transaction is authorized (funds held).
+Peeap delivers exactly **three** event types today. Every delivery uses the
+same envelope:
 
 ```json
 {
-  "id": "evt_abc123",
-  "type": "transaction.authorized",
-  "createdAt": "2024-01-15T10:30:00Z",
+  "id": "b4d1f8e2-3c6a-4f9b-8e2d-7a5c1f4b9e3d",
+  "type": "payment.completed",
+  "created": 1752487200,
+  "data": { }
+}
+```
+
+- `id` — unique event id
+- `type` — one of the event names below
+- `created` — Unix timestamp in **seconds**
+- `data` — the event object
+
+<Note>
+For deduplication, use the `X-Webhook-Id` **header** — it is stable across
+retries of the same delivery.
+</Note>
+
+## payment.completed
+
+Sent when an incoming payment settles and your wallet is credited. This fires
+on **every** completion rail: mobile money, USSD, card, scan-to-pay / QR, NFC
+tap, and POS.
+
+```json
+{
+  "id": "b4d1f8e2-3c6a-4f9b-8e2d-7a5c1f4b9e3d",
+  "type": "payment.completed",
+  "created": 1752487200,
   "data": {
-    "id": "txn_xyz789",
-    "type": "AUTHORIZATION",
-    "status": "AUTHORIZED",
-    "amount": 99.99,
+    "id": "cs_a1b2c3d4",
+    "reference": "order_1042",
+    "amount": 150.00,
     "currency": "SLE",
-    "cardId": "crd_def456",
-    "walletId": "wal_ghi789",
-    "merchant": {
-      "name": "Example Store",
-      "category": "5411",
-      "city": "New York",
-      "country": "US"
-    },
-    "authorizationCode": "AUTH123"
+    "status": "completed",
+    "payment_method": "mobile_money"
   }
 }
 ```
 
-### transaction.completed
+| Field | Description |
+|-------|-------------|
+| `id` | The checkout session id (the same id you got when creating the session) |
+| `reference` | Your reference from session creation, or `null` |
+| `amount` | Amount paid, in SLE |
+| `currency` | Currency code (`SLE`) |
+| `status` | Always `"completed"` for this event |
+| `payment_method` | The rail the customer paid on, e.g. `mobile_money`, `ussd`, `peeap_card`, `scan_to_pay` |
 
-Sent when a transaction is captured/completed.
+## payout.completed
+
+Sent when a payout you initiated reaches its destination.
 
 ```json
 {
-  "id": "evt_abc124",
-  "type": "transaction.completed",
-  "createdAt": "2024-01-15T10:30:00Z",
+  "id": "c7e2a9f4-1b8d-4e3c-9f6a-2d5b8e1c4a7d",
+  "type": "payout.completed",
+  "created": 1752490800,
   "data": {
-    "id": "txn_xyz789",
-    "type": "CAPTURE",
-    "status": "CAPTURED",
-    "amount": 99.99,
+    "id": "po_e5f6g7h8",
+    "amount": 500.00,
+    "fee": 10.00,
     "currency": "SLE",
-    "cardId": "crd_def456",
-    "walletId": "wal_ghi789",
-    "merchant": {
-      "name": "Example Store",
-      "category": "5411"
-    }
+    "status": "completed",
+    "destination": { "type": "momo", "provider": "Orange Money" },
+    "failure_message": null
   }
 }
 ```
 
-### transaction.declined
+| Field | Description |
+|-------|-------------|
+| `id` | The payout id |
+| `amount` | Payout amount, in SLE |
+| `fee` | Fee charged (may be absent when the payout settles asynchronously) |
+| `currency` | Currency code (`SLE`) |
+| `status` | Always `"completed"` for this event |
+| `destination` | `{ type, provider }` (may be absent on asynchronous settlement) |
+| `failure_message` | Always `null` for this event |
 
-Sent when a transaction is declined.
+## payout.failed
+
+Sent when a payout fails. The debited funds are automatically refunded to your
+wallet.
 
 ```json
 {
-  "id": "evt_abc125",
-  "type": "transaction.declined",
-  "createdAt": "2024-01-15T10:30:00Z",
+  "id": "d9f4b1e7-6c2a-4a8e-b3d5-8f1c4e7a2d5b",
+  "type": "payout.failed",
+  "created": 1752491100,
   "data": {
-    "id": "txn_xyz790",
-    "type": "PURCHASE",
-    "status": "DECLINED",
+    "id": "po_e5f6g7h8",
     "amount": 500.00,
     "currency": "SLE",
-    "cardId": "crd_def456",
-    "declineReason": "INSUFFICIENT_FUNDS",
-    "responseCode": "51"
+    "status": "failed",
+    "failure_message": "Recipient account not found"
   }
 }
 ```
 
-### transaction.refunded
-
-Sent when a transaction is refunded.
-
-```json
-{
-  "id": "evt_abc126",
-  "type": "transaction.refunded",
-  "createdAt": "2024-01-15T10:30:00Z",
-  "data": {
-    "id": "txn_refund_abc",
-    "originalTransactionId": "txn_xyz789",
-    "type": "REFUND",
-    "status": "COMPLETED",
-    "amount": 25.00,
-    "currency": "SLE",
-    "reason": "Partial return"
-  }
-}
-```
-
-## Card Events
-
-### card.created
-
-Sent when a new card is issued.
-
-```json
-{
-  "id": "evt_card001",
-  "type": "card.created",
-  "createdAt": "2024-01-15T10:30:00Z",
-  "data": {
-    "id": "crd_new123",
-    "type": "VIRTUAL",
-    "status": "PENDING_ACTIVATION",
-    "lastFour": "4242",
-    "walletId": "wal_abc123",
-    "userId": "usr_def456"
-  }
-}
-```
-
-### card.activated
-
-Sent when a card is activated.
-
-```json
-{
-  "id": "evt_card002",
-  "type": "card.activated",
-  "createdAt": "2024-01-15T10:30:00Z",
-  "data": {
-    "id": "crd_new123",
-    "status": "ACTIVE",
-    "activatedAt": "2024-01-15T10:30:00Z"
-  }
-}
-```
-
-### card.blocked
-
-Sent when a card is blocked.
-
-```json
-{
-  "id": "evt_card003",
-  "type": "card.blocked",
-  "createdAt": "2024-01-15T10:30:00Z",
-  "data": {
-    "id": "crd_abc123",
-    "status": "BLOCKED",
-    "blockReason": "LOST",
-    "blockedAt": "2024-01-15T10:30:00Z"
-  }
-}
-```
-
-### card.cancelled
-
-Sent when a card is permanently cancelled.
-
-```json
-{
-  "id": "evt_card004",
-  "type": "card.cancelled",
-  "createdAt": "2024-01-15T10:30:00Z",
-  "data": {
-    "id": "crd_abc123",
-    "status": "CANCELLED",
-    "cancelledAt": "2024-01-15T10:30:00Z"
-  }
-}
-```
-
-## Wallet Events
-
-### wallet.created
-
-Sent when a new wallet is created.
-
-```json
-{
-  "id": "evt_wal001",
-  "type": "wallet.created",
-  "createdAt": "2024-01-15T10:30:00Z",
-  "data": {
-    "id": "wal_new123",
-    "currencyCode": "SLE",
-    "status": "ACTIVE",
-    "ownerId": "usr_abc123",
-    "ownerType": "USER"
-  }
-}
-```
-
-### wallet.frozen
-
-Sent when a wallet is frozen.
-
-```json
-{
-  "id": "evt_wal002",
-  "type": "wallet.frozen",
-  "createdAt": "2024-01-15T10:30:00Z",
-  "data": {
-    "id": "wal_abc123",
-    "status": "FROZEN",
-    "frozenAt": "2024-01-15T10:30:00Z",
-    "reason": "Suspicious activity detected"
-  }
-}
-```
-
-### wallet.low_balance
-
-Sent when wallet balance falls below threshold.
-
-```json
-{
-  "id": "evt_wal003",
-  "type": "wallet.low_balance",
-  "createdAt": "2024-01-15T10:30:00Z",
-  "data": {
-    "id": "wal_abc123",
-    "currencyCode": "SLE",
-    "availableBalance": 25.00,
-    "threshold": 50.00
-  }
-}
-```
-
-## KYC Events
-
-### kyc.submitted
-
-Sent when KYC documents are submitted.
-
-```json
-{
-  "id": "evt_kyc001",
-  "type": "kyc.submitted",
-  "createdAt": "2024-01-15T10:30:00Z",
-  "data": {
-    "userId": "usr_abc123",
-    "status": "PENDING",
-    "submittedAt": "2024-01-15T10:30:00Z",
-    "requestedTier": 2
-  }
-}
-```
-
-### kyc.approved
-
-Sent when KYC verification is approved.
-
-```json
-{
-  "id": "evt_kyc002",
-  "type": "kyc.approved",
-  "createdAt": "2024-01-15T10:30:00Z",
-  "data": {
-    "userId": "usr_abc123",
-    "status": "APPROVED",
-    "approvedAt": "2024-01-15T10:30:00Z",
-    "previousTier": 1,
-    "newTier": 2
-  }
-}
-```
-
-### kyc.rejected
-
-Sent when KYC verification is rejected.
-
-```json
-{
-  "id": "evt_kyc003",
-  "type": "kyc.rejected",
-  "createdAt": "2024-01-15T10:30:00Z",
-  "data": {
-    "userId": "usr_abc123",
-    "status": "REJECTED",
-    "rejectedAt": "2024-01-15T10:30:00Z",
-    "reasons": ["DOC_UNREADABLE", "ADDRESS_INVALID"]
-  }
-}
-```
+| Field | Description |
+|-------|-------------|
+| `id` | The payout id |
+| `amount` | Payout amount, in SLE |
+| `currency` | Currency code (`SLE`) |
+| `status` | Always `"failed"` for this event |
+| `failure_message` | Why the rail rejected the payout, or `null` |
 
 ## Subscribing to Events
 
-When registering a webhook, specify which events to receive:
+Specify events when registering, or omit `events` to receive all three:
 
 ```bash
-curl -X POST https://api.peeap.com/webhooks \
-  -H "Authorization: Bearer YOUR_TOKEN" \
+curl -X POST https://api.peeap.com/v1/webhooks \
+  -H "Authorization: Bearer sk_live_YOUR_SECRET_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "url": "https://your-server.com/webhooks",
-    "events": [
-      "transaction.completed",
-      "transaction.declined",
-      "card.blocked",
-      "wallet.low_balance"
-    ]
+    "url": "https://your-server.com/webhooks/peeap",
+    "events": ["payment.completed", "payout.failed"]
   }'
 ```
 
-Use `"events": ["*"]` to subscribe to all events.
+Endpoints registered via **Business Settings** are subscribed to all three
+events automatically.
+
+## Roadmap
+
+<Note>
+Events for refunds, KYC status changes, and card lifecycle are under
+consideration but are **not available today**. Only the three events on this
+page are delivered — do not build against any other event name.
+</Note>

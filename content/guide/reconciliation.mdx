@@ -1,6 +1,6 @@
 ---
 title: "10 · Reconciliation"
-description: "Build your own ledger and prove every payment is accounted for."
+description: "Keep your own ledger and diff it against Peeap's list of your payments."
 ---
 
 # Chapter 10 · Reconciliation
@@ -10,15 +10,17 @@ actually happened?** Every order you believe is paid should map to a real
 `COMPLETE` session, and every `COMPLETE` session should map to a fulfilled order.
 No orphans on either side.
 
-## You own the ledger
+## You still own your ledger
 
-A reminder of the constraint from [Chapter 7](/guide/confirming-payments): **Peeap
-has no endpoint that lists your payments.** You can read a session by id, but you
-can't ask "show me all my payments today." That means **your database is the
-authoritative ledger**, and reconciliation is the discipline of keeping it true.
+Peeap can now answer "show me all my payments today":
+[`GET /v1/payments`](#the-list-endpoint-get-v1payments) lists your checkout
+payments, filterable by date range and status. That makes reconciliation a
+**diff**: your records on one side, Peeap's on the other.
 
-This is not a limitation to fear — it's normal for payment integrations. You
-already started the ledger in Chapter 7. Here's the full shape:
+Keeping your own ledger is still the recommendation — it's what you diff
+*against*, and it's the only place that knows what you *expected* (amounts,
+order ids, fulfilment state). You already started it in Chapter 7. Here's the
+full shape:
 
 ```sql
 -- one row per checkout session you create
@@ -35,9 +37,48 @@ CREATE TABLE peeap_payments (
 
 <Note>
 Write a row the instant `create` returns (status `OPEN`). Update it only through
-your idempotent fulfilment guard ([Chapter 8](/guide/idempotency)). This table —
-not Peeap, not your order table — is where you reconcile.
+your idempotent fulfilment guard ([Chapter 8](/guide/idempotency)). This table
+is one side of the diff; `GET /v1/payments` is the other.
 </Note>
+
+## The list endpoint: GET /v1/payments
+
+Authenticated with your secret key (`sk_…`, scope `transactions:read`). Returns
+your checkout payments, newest first.
+
+```bash
+curl "https://api.peeap.com/v1/payments?from=2026-07-14&to=2026-07-14&status=completed&limit=100" \
+  -H "Authorization: Bearer sk_live_YOUR_SECRET_KEY"
+```
+
+| Param | Meaning |
+|-------|---------|
+| `from`, `to` | ISO date or datetime, inclusive, on `created_at`. A bare date for `to` (e.g. `2026-07-14`) means the **end** of that day, so `from=X&to=X` is "all of day X". |
+| `status` | `completed` \| `open` \| `expired` \| `failed` \| `cancelled` |
+| `page`, `limit` | Pagination; `limit` max 100 |
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "cs_a1b2c3d4",
+      "reference": "order_1042",
+      "amount": 150.00,
+      "currency": "SLE",
+      "status": "completed",
+      "payment_method": "mobile_money",
+      "description": "Order #1042",
+      "created_at": "2026-07-14T09:12:00.000Z",
+      "completed_at": "2026-07-14T09:13:41.000Z"
+    }
+  ],
+  "meta": { "page": 1, "limit": 100, "total": 1, "total_pages": 1, "has_next_page": false, "has_previous_page": false }
+}
+```
+
+`id` is the session id you got at create time; `reference` is yours — those two
+are your join keys.
 
 ## The three checks
 
@@ -45,92 +86,99 @@ Run these on a schedule (e.g. nightly) and alert on anything they surface.
 
 <Steps>
   <Step title="Settle the still-open">
-    For every row still `OPEN` and younger than its 30-minute window, read the
-    session from Peeap. `COMPLETE` → fulfil + mark `PAID`. `EXPIRED` → mark
-    `EXPIRED`. This is your reconciler from Chapter 7; reconciliation is just
-    running it deliberately and reporting the results.
+    For every row still `OPEN`, read the session from Peeap. `COMPLETE` →
+    fulfil + mark `PAID`. `EXPIRED` → mark `EXPIRED`. This is your reconciler
+    from Chapter 7; reconciliation is just running it deliberately and
+    reporting the results.
   </Step>
   <Step title="Match amounts">
     For every `PAID` row, assert `paid_amount === expected_amount`. A mismatch
     means the customer paid a different amount than the order required — flag it,
     don't auto-resolve it.
   </Step>
-  <Step title="Find orphans">
-    Every `PAID` payment should have a fulfilled order, and every fulfilled order
-    should have a `PAID` payment. List the exceptions in both directions — those
-    are the cases worth a human's eyes.
+  <Step title="Diff against Peeap's list">
+    Pull `GET /v1/payments?status=completed` for the period and diff both ways:
+    a completed payment with no `PAID` row in your ledger means you owe someone
+    fulfilment (a webhook you missed, a crash mid-settle); a `PAID` row Peeap
+    doesn't list means your records are wrong. Both directions are worth a
+    human's eyes.
   </Step>
 </Steps>
 
-## A minimal reconciler
+## A daily close recipe
 
 ```javascript
-async function reconcile() {
-  const report = { settled: 0, expired: 0, mismatches: [], stillOpen: 0 };
-
-  const open = await db.query(
-    "SELECT * FROM peeap_payments WHERE status = 'OPEN'"
-  );
-
-  for (const row of open) {
-    const s = await getSessionSafe(row.session_id); // Chapter 9 — fails to UNKNOWN
-
-    if (s.status === "COMPLETE") {
-      await fulfilOrderOnce(row.session_id, s);      // Chapter 8 — atomic claim
-      if (Number(s.amount) !== Number(row.expected_amount)) {
-        report.mismatches.push({
-          sessionId: row.session_id,
-          expected: row.expected_amount,
-          paid: s.amount,
-        });
-      }
-      report.settled++;
-    } else if (s.status === "EXPIRED") {
-      await db.query(
-        "UPDATE peeap_payments SET status='EXPIRED' WHERE session_id=$1",
-        [row.session_id]
-      );
-      report.expired++;
-    } else {
-      report.stillOpen++; // OPEN or UNKNOWN — re-check next run
-    }
+// Run shortly after midnight for the previous day.
+async function dailyClose(day /* "2026-07-14" */) {
+  // 1. Everything Peeap says completed that day (paginate past 100).
+  const peeap = [];
+  for (let page = 1; ; page++) {
+    const res = await fetch(
+      `https://api.peeap.com/v1/payments?from=${day}&to=${day}&status=completed&limit=100&page=${page}`,
+      { headers: { Authorization: `Bearer ${process.env.PEEAP_SECRET_KEY}` } }
+    ).then((r) => r.json());
+    peeap.push(...res.data);
+    if (!res.meta.has_next_page) break;
   }
 
-  if (report.mismatches.length) await alertOps(report); // money is on the line
-  return report;
+  // 2. Everything YOUR ledger says was paid that day.
+  const mine = await db.query(
+    "SELECT session_id, expected_amount FROM peeap_payments WHERE status='PAID' AND settled_at::date = $1",
+    [day]
+  );
+  const mineById = new Map(mine.map((r) => [r.session_id, r]));
+  const peeapById = new Map(peeap.map((p) => [p.id, p]));
+
+  // 3. Diff both directions + amounts.
+  const missedByMe = peeap.filter((p) => !mineById.has(p.id));      // fulfil these!
+  const phantom = mine.filter((r) => !peeapById.has(r.session_id)); // investigate
+  const amountMismatch = peeap.filter(
+    (p) => mineById.has(p.id) &&
+      Number(p.amount) !== Number(mineById.get(p.id).expected_amount)
+  );
+
+  const clean = !missedByMe.length && !phantom.length && !amountMismatch.length;
+  if (!clean) await alertOps({ day, missedByMe, phantom, amountMismatch });
+  return { day, peeap: peeap.length, mine: mine.length, clean };
 }
 ```
 
+For each session in `missedByMe`, run the *same* idempotent fulfilment your
+webhook handler and reconciler use ([Chapter 8](/guide/idempotency)) — the
+close doesn't need its own settlement path.
+
 <Warning>
-**An empty mismatch list is the only "all clear."** Don't let a reconciler that
-runs successfully but quietly skips errors read as "everything's fine." Count what
-you settled, what expired, what's still open, and what didn't match — and surface
-all four. Silence is not the same as correctness.
+**An empty diff is the only "all clear."** Don't let a close that runs
+successfully but quietly skips errors read as "everything's fine." Count what
+matched, what you missed, what Peeap doesn't know about, and what didn't match
+on amount — and surface all four. Silence is not the same as correctness.
 </Warning>
 
 ## What reconciliation protects you from
 
-- **Lost payments** — a customer paid, but a crash meant your server never marked
-  the order paid. The `OPEN` row gets re-checked and settled.
+- **Lost payments** — a customer paid, but a crash (or a parked webhook
+  delivery) meant your server never marked the order paid. The diff surfaces it
+  the same day.
 - **Wrong amounts** — partial or altered payments surface as mismatches instead of
   silently shipping.
-- **Phantom fulfilments** — an order you shipped that has no matching `PAID`
-  payment is a red flag you want to catch early.
+- **Phantom fulfilments** — an order you shipped that has no matching completed
+  payment on Peeap's side is a red flag you want to catch early.
 
 <Tip>
 **Advanced** — Keep `settled_at` and your own `created_at` so you can compute
-settlement lag and spot a provider slowdown before customers complain. If you later
-move money between wallets, append-only ledger entries (never in-place balance
-edits) make end-of-day reconciliation a single `SUM`.
+settlement lag (compare with Peeap's `completed_at`) and spot a provider
+slowdown before customers complain. If you later move money between wallets,
+append-only ledger entries (never in-place balance edits) make end-of-day
+reconciliation a single `SUM`.
 </Tip>
 
 ## You now have a production-grade integration
 
-With Chapters 7–10 in place you have create → pay → confirm-by-polling →
-idempotent-fulfil → reconcile. That is a correct, resilient Peeap Pay integration
-that doesn't lose money even when the network, the browser, or the customer
-misbehaves.
+With Chapters 7–10 in place you have create → pay → confirm →
+idempotent-fulfil → reconcile-by-diff. That is a correct, resilient Peeap Pay
+integration that doesn't lose money even when the network, the browser, or the
+customer misbehaves.
 
-One piece remains — the webhook system that *will* eventually let Peeap push
-completions to you, so you can stop leaning entirely on polling. Continue to
-[Chapter 11 → Webhooks](/guide/webhooks).
+One piece remains — the webhook system that pushes completions to you the
+moment they land, so polling becomes the fallback instead of the front line.
+Continue to [Chapter 11 → Webhooks](/guide/webhooks).
