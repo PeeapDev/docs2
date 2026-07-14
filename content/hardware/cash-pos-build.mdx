@@ -21,6 +21,60 @@ money flow tonight, before you order a single part.
 | **ATECC608A** secure element | Optional, recommended for production: holds the device key so it can't be dumped out of flash. | $2 |
 | 12V PSU + buck converter | The validator wants 12V, the ESP32 wants 3.3V. | $8 |
 
+## Or use a Linux SBC instead (Orange Pi 5, Raspberry Pi)
+
+An ESP32 is the cheapest way to build this. A **Linux single-board computer is the
+easiest**, and if you already own one, it is the better choice by a distance.
+
+An Orange Pi 5 (or a Pi 4/5) gives you WiFi, Bluetooth, a 40-pin GPIO header and
+USB in one board — and, crucially, it runs **Node.js**. That means:
+
+| | ESP32 | Linux SBC |
+| --- | --- | --- |
+| TLS to the API | embed a root CA, get it wrong, debug blind | `fetch()`. Done. |
+| HMAC signing | mbedTLS, byte buffers | `crypto.createHmac` |
+| The firmware | rewrite it in C++ | **the simulator IS the firmware** |
+| NFC reader | RC522 on SPI | USB ACR122U (PC/SC) *or* RC522 on SPI |
+| Debugging | serial prints | `ssh` in and read the logs |
+| Cost | $8 | $60–90 |
+
+The single biggest win: **the Node simulator becomes the real program.** Swap
+`ask()` for keypad reads and the printed note list for GPIO calls, and the money
+logic you already tested is the money logic that ships. No second implementation
+to drift out of sync.
+
+### What connects where
+
+- **NFC reader** — USB. An ACR122U over PC/SC works out of the box. (Peeap's
+  existing NFC bridge already speaks this.) An RC522 on SPI also works.
+- **Bill validator** — a **USB-to-TTL/RS232 adapter** is the sane path. The
+  header UART works too, but the adapter saves you a level-shifting argument.
+- **Roller motors** — GPIO **cannot** drive a motor. It switches a **motor
+  driver** (L298N, TB6612) or a relay board; the motor's current comes from the
+  12V supply, never from the board.
+- **Exit sensor** — a GPIO input.
+
+<Warning>
+**GPIO on these boards is 3.3V and not 5V-tolerant.** A 5V sensor output wired
+straight to a pin can kill the board. Use a level shifter or a 3.3V sensor.
+
+And on Orange Pi specifically: the classic `wiringPi` examples you will find
+online are for Broadcom Pis and do **not** work on the RK3588. Use `libgpiod`
+(`gpiod` on Node, `python-periphery` on Python) — it is the modern interface and
+it works on both boards.
+</Warning>
+
+### Make it behave like an appliance
+
+A machine that needs someone to log in and start a program is not a machine.
+
+- Run the program as a **systemd service** with `Restart=always`, so a crash
+  brings it straight back.
+- Enable the **hardware watchdog** so a hung board reboots itself.
+- Keep the device secret in a root-owned file (`chmod 600`), not in the repo.
+- On boot, always call `heartbeat` **before** accepting anything — that is how the
+  machine learns its float, its cassette and its limits.
+
 ## Wiring
 
 The validator is the only interesting connection. It's a serial device:

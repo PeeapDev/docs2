@@ -1,0 +1,175 @@
+---
+title: "Cash POS · Withdraw (the ATM direction)"
+description: "Tap a card, type a PIN, and the machine rolls out physical notes — with every failure path accounted for."
+---
+
+# Withdraw · the machine hands out cash
+
+The deposit direction takes paper and sends e-money. This is the reverse: the
+customer takes e-money out of their wallet and walks away with paper.
+
+Two ways in:
+
+- **Tap a card** — an NFC card identifies the holder, a PIN authorises, and the
+  roller pushes out notes. This is the ATM experience.
+- **A 6-digit code** — the customer authorises in the Peeap app on their own
+  phone and types only a code into the machine. **The machine never sees a PIN.**
+
+Both settle through the same endpoints. Build the code flow if you can; build the
+card flow if you need walk-up convenience.
+
+## The card is not a credential
+
+<Warning>
+**A card UID identifies. It does not authenticate.**
+
+MIFARE and NTAG UIDs can be read and cloned with hardware that costs less than
+the machine you are building. If a tap alone opened the cassette, anyone who
+brushed past a cardholder's bag with a cheap reader could drain their wallet.
+
+So the tap resolves **who**, and the PIN proves **it is really them** — exactly
+the model every ATM on earth uses. Never dispense cash on a tap alone.
+</Warning>
+
+The durable fix is **NTAG424 DNA**, which signs a challenge instead of handing
+over a copyable identifier. Until then, treat the UID as a username, never a
+password.
+
+## Debit before the roller turns
+
+This is the rule the whole design hangs on.
+
+**The server takes the money first. Only then does the cassette open.** If the
+debit fails, you simply never turn the motor. Dispensing first and settling
+afterwards means handing out cash you might not be able to collect for — and that
+is not a bug you find in testing, it is one you find in your monthly
+reconciliation.
+
+Because the money is already gone by the time the notes move, **every failure path
+must end with the customer holding their cash, their code, or their refund. Never
+none of the three.** Read the endpoints below with that sentence in mind; it
+explains all of them.
+
+## Endpoints
+
+### `POST /api/cash-pos/withdraw/card`
+
+Tap-to-withdraw. Signed like every device call; the PIN travels in the body, never
+in the signature (a signed field becomes a header, and headers survive in proxy
+logs).
+
+```json
+{
+  "nfc_uid": "04AABBCCDDEEFF",
+  "pin": "1234",
+  "amount": 15,
+  "idempotency_key": "cashpos-wd-CASHPOS-01-3f9a…"
+}
+```
+```json
+{
+  "ok": true,
+  "request_id": "71222d82-…",
+  "amount": 15,
+  "fee": 1,
+  "total_debited": 16,
+  "plan": [10, 5]
+}
+```
+
+`plan` is what the roller must push out, largest note first. The money is **already
+debited** when you receive this.
+
+The server checks, in order: the card is linked and active → the PIN is right
+(3 strikes, 2-hour lock) → the wallet is not frozen → the amount is inside the
+holder's KYC tier and the device ceiling → **this machine can physically compose
+the amount from the notes it holds**. That last check happens *before* the debit,
+because claiming a withdrawal you cannot dispense strands the customer.
+
+| Error | Meaning |
+| --- | --- |
+| `401 PIN_INVALID` | Wrong PIN. Nothing was charged. |
+| `402 INSUFFICIENT_FUNDS` | Balance won't cover amount + fee. |
+| `404 CARD_NOT_LINKED` | Unknown UID. |
+| `409 CANNOT_DISPENSE` | The cassette cannot make this amount. |
+| `423 PIN_LOCKED` / `WALLET_FROZEN` | Locked out. |
+
+### `POST /api/cash-pos/withdraw/claim`
+
+The code flow. Customer authorised in the app and holds a 6-digit code; this
+atomically claims it (`PENDING → PROCESSING`, exactly one winner) and returns the
+same `plan`.
+
+```json
+{ "code": "482913" }
+```
+
+Wrong codes are rate-limited hard — a guessed code pays out physical cash, so ten
+misses in fifteen minutes locks claims on that machine and raises an alert.
+
+### `POST /api/cash-pos/withdraw/settle`
+
+The notes have finished moving. Report **exactly what physically left the machine**.
+
+```json
+{
+  "request_id": "71222d82-…",
+  "dispensed": [10, 5],
+  "idempotency_key": "cashpos-st-CASHPOS-01-8c2b…"
+}
+```
+
+The server credits the float what it gave up in paper, **refunds the customer any
+shortfall**, decrements the cassette, and books the fee.
+
+<Warning>
+Report what the **exit sensor** saw, not what you told the motor to do. A roller
+that turns is not a note that left. Trust the motor instead of the sensor and you
+will refund people who were paid and pay people who were refunded.
+</Warning>
+
+A partial dispense is a normal outcome, not an error: the customer gets the notes
+that made it out, the difference goes straight back to their wallet, and an alert
+fires telling you to check the cassette for a jam.
+
+### `POST /api/cash-pos/withdraw/release`
+
+A jam **before any note moved**. The request goes back to `PENDING` and the code
+still works — at another machine or a human agent.
+
+```json
+{ "request_id": "71222d82-…" }
+```
+
+Use this and only this when `dispensed` would be empty. Settling with zero notes
+is rejected, because "we took your money and gave you nothing" is not a settlement.
+
+### `POST /api/cash-pos/cassette/set`
+
+Refill. The operator physically loads notes, then records what the machine now
+holds. **PIN-gated** — this defines what the machine may promise, so it needs a
+human, not just the box.
+
+```json
+{ "counts": { "10": 2, "5": 2 }, "pin": "1234" }
+```
+
+## Making change is not greedy
+
+The dispense planner is a bounded-knapsack DP, and that is not academic.
+
+Ask a greedy algorithm for **Le 6** from a cassette holding **one Le 5 and three
+Le 2s**. It grabs the Le 5, cannot make the remaining Le 1, and tells the customer
+"cannot dispense" — while sitting on `2 + 2 + 2`.
+
+Real cassettes drift into exactly these states as they empty. Plan properly, or
+your machine will refuse people while holding their money in notes.
+
+## Reconciliation
+
+The cassette table is what the machine *believes* it holds. Counting the cassette
+is what it *actually* holds. **Those two numbers must match at the end of every
+day**, exactly like the cash box on the deposit side.
+
+Drift is either a jam the sensor missed, or someone helping themselves. Find out
+today, not next quarter.

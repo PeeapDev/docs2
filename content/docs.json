@@ -62,7 +62,8 @@
             "pages": [
               "hardware/cash-pos-overview",
               "hardware/cash-pos-note-reading",
-              "hardware/cash-pos-build"
+              "hardware/cash-pos-build",
+              "hardware/cash-pos-withdraw"
             ]
           },
           {
